@@ -1,6 +1,8 @@
 import * as cheerio from "cheerio";
 import { YoutubeTranscript } from "youtube-transcript";
-import pdfParse from "pdf-parse";
+import * as pdfParseModule from "pdf-parse";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const pdfParse: (buffer: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
 import { readFileSync } from "fs";
 
 export async function fetchWebContent(url: string): Promise<string> {
