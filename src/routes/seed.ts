@@ -10,7 +10,7 @@ const AUDIT_DIR = path.join(process.env.HOME || "~", "Documents/linkdup-audit");
 seedRouter.post("/", (_req, res) => {
   const db = getDb();
 
-  const results: Record<string, number> = {};
+  const results: Record<string, number | string> = {};
 
   // Import templates
   try {

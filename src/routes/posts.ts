@@ -67,7 +67,14 @@ postsRouter.put("/:id", (req, res) => {
   values.push(req.params.id);
   db.prepare(`UPDATE posts SET ${setClauses.join(", ")} WHERE id = ?`).run(...values);
 
-  const updated = db.prepare("SELECT * FROM posts WHERE id = ?").get(req.params.id);
+  const updated = db.prepare(`
+    SELECT p.*, s.name as style_name, t.name as template_name, c.name as contenu_name
+    FROM posts p
+    LEFT JOIN styles s ON p.style_id = s.id
+    LEFT JOIN templates t ON p.template_id = t.id
+    LEFT JOIN contenus c ON p.contenu_id = c.id
+    WHERE p.id = ?
+  `).get(req.params.id);
   res.json(updated);
 });
 
