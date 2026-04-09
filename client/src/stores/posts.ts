@@ -40,6 +40,8 @@ interface PostsStore {
   create: (data: Partial<Post>) => Promise<Post>;
   update: (id: number, data: Partial<Post>) => Promise<Post>;
   remove: (id: number) => Promise<void>;
+  generate: (id: number) => Promise<Post>;
+  optimize: (id: number) => Promise<Post>;
 }
 
 export const usePostsStore = create<PostsStore>((set, get) => ({
@@ -78,5 +80,21 @@ export const usePostsStore = create<PostsStore>((set, get) => ({
   remove: async (id) => {
     await fetch(`/api/posts/${id}`, { method: "DELETE" });
     set({ posts: get().posts.filter((p) => p.id !== id) });
+  },
+
+  generate: async (id) => {
+    const res = await fetch(`/api/posts/${id}/generate`, { method: "POST" });
+    if (!res.ok) throw new Error((await res.json()).error);
+    const updated = await res.json();
+    set({ posts: get().posts.map((p) => (p.id === id ? updated : p)) });
+    return updated;
+  },
+
+  optimize: async (id) => {
+    const res = await fetch(`/api/posts/${id}/optimize`, { method: "POST" });
+    if (!res.ok) throw new Error((await res.json()).error);
+    const updated = await res.json();
+    set({ posts: get().posts.map((p) => (p.id === id ? updated : p)) });
+    return updated;
   },
 }));

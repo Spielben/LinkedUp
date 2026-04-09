@@ -39,13 +39,16 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 export function PostDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { posts, fetch: fetchPosts, update, remove } = usePostsStore();
+  const { posts, fetch: fetchPosts, update, remove, generate, optimize } = usePostsStore();
   const { styles, fetch: fetchStyles } = useStylesStore();
   const { templates, fetch: fetchTemplates } = useTemplatesStore();
   const { contenus, fetch: fetchContenus } = useContenusStore();
 
   const [post, setPost] = useState<Post | null>(null);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPosts();
@@ -75,6 +78,32 @@ export function PostDetail() {
   };
 
   const displayVersion = post.final_version || post[`v${post.selected_version?.replace("V", "")}` as keyof Post] as string || "";
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setAiError(null);
+    try {
+      const updated = await generate(post.id);
+      setPost(updated);
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleOptimize = async () => {
+    setOptimizing(true);
+    setAiError(null);
+    try {
+      const updated = await optimize(post.id);
+      setPost(updated);
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOptimizing(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl">
@@ -191,13 +220,21 @@ export function PostDetail() {
 
         {/* Right column — Versions + Final */}
         <div className="col-span-2 space-y-4">
-          {/* Generate button (placeholder — will call AI in Phase 3) */}
+          {/* AI error banner */}
+          {aiError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between items-center">
+              <span>{aiError}</span>
+              <button onClick={() => setAiError(null)} className="ml-3 text-red-400 hover:text-red-600">✕</button>
+            </div>
+          )}
+
+          {/* Generate button */}
           <button
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-            disabled
-            title="AI generation coming in Phase 3"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!post.subject || generating}
+            onClick={handleGenerate}
           >
-            Generate V1 / V2 / V3 (coming soon)
+            {generating ? "Generating…" : "✨ Generate V1 / V2 / V3"}
           </button>
 
           {/* V1 / V2 / V3 */}
@@ -269,11 +306,11 @@ export function PostDetail() {
             <div className="flex justify-between items-center mb-2">
               <label className="text-sm font-medium">Optimization Instructions</label>
               <button
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40"
-                disabled
-                title="AI optimization coming in Phase 3"
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={!post.final_version || !post.optimization_instructions || optimizing}
+                onClick={handleOptimize}
               >
-                Optimize (coming soon)
+                {optimizing ? "Optimizing…" : "⚡ Optimize"}
               </button>
             </div>
             <textarea
