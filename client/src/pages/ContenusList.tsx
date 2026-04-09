@@ -1,19 +1,11 @@
-import { useEffect, useState } from "react";
-
-interface Contenu {
-  id: number;
-  name: string;
-  type: string | null;
-  url: string | null;
-  status: string;
-  created_at: string;
-}
+import { useEffect } from "react";
+import { useContenusStore } from "../stores/contenus";
 
 export function ContenusList() {
-  const [contenus, setContenus] = useState<Contenu[]>([]);
+  const { contenus, loading, fetch: fetchContenus, create: createContenu } = useContenusStore();
 
   useEffect(() => {
-    fetch("/api/contenus").then((r) => r.json()).then(setContenus);
+    fetchContenus();
   }, []);
 
   return (
@@ -26,26 +18,39 @@ export function ContenusList() {
             const name = prompt("Content name:");
             if (!name) return;
             const url = prompt("URL (web or YouTube, optional):");
-            fetch("/api/contenus", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name, url: url || null }),
-            }).then(() => fetch("/api/contenus").then((r) => r.json()).then(setContenus));
+            createContenu({ name, url: url || undefined });
           }}
         >
           + New Content
         </button>
       </div>
 
-      {contenus.length === 0 ? (
+      {loading ? (
+        <p className="text-gray-400">Loading...</p>
+      ) : contenus.length === 0 ? (
         <p className="text-gray-500">No content sources yet.</p>
       ) : (
         <div className="grid gap-3">
           {contenus.map((c) => (
             <div key={c.id} className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="font-medium text-sm">{c.name}</h3>
-              {c.url && <p className="text-xs text-blue-600 mt-1 truncate">{c.url}</p>}
-              <p className="text-xs text-gray-400 mt-1">{c.type || "—"} — {c.status}</p>
+              <div className="flex justify-between items-start">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-sm">{c.name}</h3>
+                  {c.url && (
+                    <a href={c.url} target="_blank" className="text-xs text-blue-600 mt-1 block truncate">
+                      {c.url}
+                    </a>
+                  )}
+                  {c.description && (
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{c.description}</p>
+                  )}
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ml-4 shrink-0 ${
+                  c.status === "generated" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                }`}>
+                  {c.status}
+                </span>
+              </div>
             </div>
           ))}
         </div>

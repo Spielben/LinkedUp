@@ -7,6 +7,7 @@ import { stylesRouter } from "./routes/styles.js";
 import { templatesRouter } from "./routes/templates.js";
 import { contenusRouter } from "./routes/contenus.js";
 import { settingsRouter } from "./routes/settings.js";
+import { seedRouter } from "./routes/seed.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,6 +22,7 @@ export function createServer(port = 3000) {
   app.use("/api/templates", templatesRouter);
   app.use("/api/contenus", contenusRouter);
   app.use("/api/settings", settingsRouter);
+  app.use("/api/seed", seedRouter);
 
   // Serve built client in production
   const clientDist = path.join(__dirname, "../dist/client");

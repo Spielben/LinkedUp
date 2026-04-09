@@ -5,6 +5,7 @@ import { StylesList } from "./pages/StylesList";
 import { TemplatesList } from "./pages/TemplatesList";
 import { ContenusList } from "./pages/ContenusList";
 import { Settings } from "./pages/Settings";
+import { PostDetail } from "./pages/PostDetail";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
@@ -51,6 +52,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/posts" element={<PostsList />} />
+            <Route path="/posts/:id" element={<PostDetail />} />
             <Route path="/styles" element={<StylesList />} />
             <Route path="/templates" element={<TemplatesList />} />
             <Route path="/contenus" element={<ContenusList />} />
