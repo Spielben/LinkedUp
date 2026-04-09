@@ -1,8 +1,4 @@
 import * as cheerio from "cheerio";
-import { YoutubeTranscript } from "youtube-transcript";
-import * as pdfParseModule from "pdf-parse";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const pdfParse: (buffer: Buffer) => Promise<{ text: string }> = (pdfParseModule as any).default ?? pdfParseModule;
 import { readFileSync } from "fs";
 
 export async function fetchWebContent(url: string): Promise<string> {
@@ -60,11 +56,14 @@ export async function fetchYouTubeTranscript(url: string): Promise<string> {
   const videoId = extractYouTubeId(url);
   if (!videoId) throw new Error(`Could not extract YouTube video ID from: ${url}`);
 
+  const { YoutubeTranscript } = await import("youtube-transcript");
   const segments = await YoutubeTranscript.fetchTranscript(videoId);
-  return segments.map((s) => s.text).join(" ").replace(/\s+/g, " ").trim();
+  return segments.map((s: { text: string }) => s.text).join(" ").replace(/\s+/g, " ").trim();
 }
 
 export async function fetchPdfContent(filePath: string): Promise<string> {
+  const pdfParseModule = await import("pdf-parse");
+  const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
   const buffer = readFileSync(filePath);
   const data = await pdfParse(buffer);
   return data.text.replace(/\s+/g, " ").trim();
