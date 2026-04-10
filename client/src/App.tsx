@@ -23,7 +23,8 @@ export default function App() {
         {/* Sidebar */}
         <nav className="w-56 bg-white border-r border-gray-200 flex flex-col">
           <div className="p-4 border-b border-gray-200">
-            <h1 className="text-xl font-bold tracking-tight">LINK'DUP</h1>
+            <img src="/spielben-logo.png" alt="Spielben & Co." className="h-10 w-auto" />
+            <h1 className="text-xl font-bold tracking-tight mt-2">LINK'DUP</h1>
             <p className="text-xs text-gray-500 mt-0.5">LinkedIn Content Generator</p>
           </div>
           <ul className="flex-1 py-2">
