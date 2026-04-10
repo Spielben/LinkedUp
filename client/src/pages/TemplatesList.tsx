@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTemplatesStore } from "../stores/templates";
 
 const categoryColors: Record<string, string> = {
@@ -22,6 +22,9 @@ export function TemplatesList() {
     example_text: "",
     template_text: "",
   });
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -49,17 +52,72 @@ export function TemplatesList() {
     setShowForm(false);
   };
 
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("table", "templates");
+
+      const res = await fetch("/api/import/csv", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      setImportMessage(`Imported ${data.imported} rows, skipped ${data.skipped}`);
+      await fetchTemplates();
+
+      if (csvInputRef.current) {
+        csvInputRef.current.value = "";
+      }
+
+      setTimeout(() => setImportMessage(null), 3000);
+    } catch (err: unknown) {
+      setImportMessage(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Templates ({templates.length})</h2>
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-          onClick={() => setShowForm(!showForm)}
-        >
-          + New Template
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-50"
+            disabled={importing}
+            onClick={() => csvInputRef.current?.click()}
+          >
+            {importing ? "Importing..." : "Import CSV"}
+          </button>
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+            onClick={() => setShowForm(!showForm)}
+          >
+            + New Template
+          </button>
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+        </div>
       </div>
+
+      {importMessage && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
+          {importMessage}
+        </div>
+      )}
 
       {showForm && (
         <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
