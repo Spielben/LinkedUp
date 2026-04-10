@@ -9,6 +9,7 @@ import { contenusRouter } from "./routes/contenus.js";
 import { settingsRouter } from "./routes/settings.js";
 import { seedRouter } from "./routes/seed.js";
 import { importRouter } from "./routes/import.js";
+import { linkedinPostsRouter } from "./routes/linkedin-posts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +26,7 @@ export function createServer(port = 3000) {
   app.use("/api/settings", settingsRouter);
   app.use("/api/seed", seedRouter);
   app.use("/api/import", importRouter);
+  app.use("/api/linkedin-posts", linkedinPostsRouter);
 
   // Serve built client in production
   const clientDist = path.join(__dirname, "../dist/client");

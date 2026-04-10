@@ -6,6 +6,7 @@ import { TemplatesList } from "./pages/TemplatesList";
 import { ContenusList } from "./pages/ContenusList";
 import { Settings } from "./pages/Settings";
 import { PostDetail } from "./pages/PostDetail";
+import { LinkedInHistory } from "./pages/LinkedInHistory";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
@@ -13,6 +14,7 @@ const navItems = [
   { to: "/styles", label: "Styles" },
   { to: "/templates", label: "Templates" },
   { to: "/contenus", label: "Contenus" },
+  { to: "/linkedin", label: "LinkedIn" },
   { to: "/settings", label: "Settings" },
 ];
 
@@ -57,6 +59,7 @@ export default function App() {
             <Route path="/styles" element={<StylesList />} />
             <Route path="/templates" element={<TemplatesList />} />
             <Route path="/contenus" element={<ContenusList />} />
+            <Route path="/linkedin" element={<LinkedInHistory />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
