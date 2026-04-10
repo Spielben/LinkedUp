@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStylesStore } from "../stores/styles";
+import { importFile } from "../lib/import-file";
 
 export function StylesList() {
   const { styles, loading, fetch: fetchStyles, create: createStyle, remove: deleteStyle } = useStylesStore();
@@ -10,7 +11,8 @@ export function StylesList() {
   const [formData, setFormData] = useState({ name: "", linkedin_url: "", examples: "" });
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
-  const csvInputRef = useRef<HTMLInputElement>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchStyles();
@@ -44,7 +46,7 @@ export function StylesList() {
     setShowForm(false);
   };
 
-  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -52,24 +54,11 @@ export function StylesList() {
     setImportMessage(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("table", "styles");
-
-      const res = await fetch("/api/import/csv", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      setImportMessage(`Imported ${data.imported} rows, skipped ${data.skipped}`);
+      const data = await importFile(file, "styles");
+      setImportMessage(`Imported ${data.imported} styles, skipped ${data.skipped}`);
       await fetchStyles();
-
-      if (csvInputRef.current) {
-        csvInputRef.current.value = "";
-      }
-
-      setTimeout(() => setImportMessage(null), 3000);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setTimeout(() => setImportMessage(null), 4000);
     } catch (err: unknown) {
       setImportMessage(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -80,12 +69,28 @@ export function StylesList() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Styles</h2>
-        <div className="flex gap-2">
+        <h2 className="text-2xl font-bold">Styles ({styles.length})</h2>
+        <div className="flex gap-2 items-center">
+          <div className="flex border border-gray-300 rounded-lg overflow-hidden mr-2">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`px-2 py-1.5 text-xs ${viewMode === "list" ? "bg-gray-200 font-medium" : "hover:bg-gray-50"}`}
+              title="List view"
+            >
+              ☰
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`px-2 py-1.5 text-xs ${viewMode === "grid" ? "bg-gray-200 font-medium" : "hover:bg-gray-50"}`}
+              title="Grid view"
+            >
+              ▦
+            </button>
+          </div>
           <button
             className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-50"
             disabled={importing}
-            onClick={() => csvInputRef.current?.click()}
+            onClick={() => fileInputRef.current?.click()}
           >
             {importing ? "Importing..." : "Import CSV"}
           </button>
@@ -96,10 +101,10 @@ export function StylesList() {
             + New Style
           </button>
           <input
-            ref={csvInputRef}
+            ref={fileInputRef}
             type="file"
-            accept=".csv"
-            onChange={handleImportCSV}
+            accept=".csv,.json"
+            onChange={handleImport}
             className="hidden"
           />
         </div>
@@ -145,18 +150,12 @@ export function StylesList() {
               />
             </div>
             <div className="flex gap-2">
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-              >
+              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
                 Create
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setFormData({ name: "", linkedin_url: "", examples: "" });
-                }}
+                onClick={() => { setShowForm(false); setFormData({ name: "", linkedin_url: "", examples: "" }); }}
                 className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300"
               >
                 Cancel
@@ -169,7 +168,7 @@ export function StylesList() {
       {loading ? (
         <p className="text-gray-400">Loading...</p>
       ) : styles.length === 0 ? (
-        <p className="text-gray-500">No styles yet. Add a LinkedIn profile to analyze.</p>
+        <p className="text-gray-500">No styles yet. Import a CSV/JSON or create one.</p>
       ) : (
         <>
           {generateError && (
@@ -178,40 +177,38 @@ export function StylesList() {
               <button onClick={() => setGenerateError(null)} className="ml-3 text-red-400 hover:text-red-600">✕</button>
             </div>
           )}
-          <div className="grid gap-4">
+          <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "grid gap-4"}>
             {styles.map((style) => (
-              <div key={style.id} className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1 cursor-pointer" onClick={() => setExpandedId(expandedId === style.id ? null : style.id)}>
-                    <h3 className="font-medium hover:text-blue-600">{style.name}</h3>
-                    {style.linkedin_url && (
-                      <a href={style.linkedin_url} target="_blank" onClick={(e) => e.stopPropagation()} className="text-sm text-blue-600 mt-1 block">
-                        {style.linkedin_url}
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      style.status === "generated" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                    }`}>
-                      {style.status}
-                    </span>
-                    {style.examples && !style.instructions && (
-                      <button
-                        className="px-3 py-1 text-xs font-medium rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={generatingId === style.id}
-                        onClick={() => handleGenerate(style.id)}
-                      >
-                        {generatingId === style.id ? "Generating…" : "✨ Generate"}
-                      </button>
-                    )}
+              <div key={style.id} className="bg-white rounded-lg border border-gray-200 p-4 overflow-hidden">
+                <div className="cursor-pointer" onClick={() => setExpandedId(expandedId === style.id ? null : style.id)}>
+                  <h3 className="font-medium hover:text-blue-600 truncate">{style.name}</h3>
+                  {style.linkedin_url && (
+                    <a href={style.linkedin_url} target="_blank" onClick={(e) => e.stopPropagation()} className="text-sm text-blue-600 mt-1 block truncate">
+                      {style.linkedin_url}
+                    </a>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                    style.status === "generated" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                  }`}>
+                    {style.status}
+                  </span>
+                  {style.examples && !style.instructions && (
                     <button
-                      onClick={() => handleDelete(style.id)}
-                      className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                      className="px-3 py-1 text-xs font-medium rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      disabled={generatingId === style.id}
+                      onClick={() => handleGenerate(style.id)}
                     >
-                      Delete
+                      {generatingId === style.id ? "Generating..." : "Generate"}
                     </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => handleDelete(style.id)}
+                    className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg whitespace-nowrap ml-auto"
+                  >
+                    Delete
+                  </button>
                 </div>
                 {style.instructions && (
                   <div>
@@ -219,10 +216,7 @@ export function StylesList() {
                       {style.instructions}
                     </p>
                     {expandedId === style.id && (
-                      <button
-                        onClick={() => setExpandedId(null)}
-                        className="text-xs text-blue-600 mt-2 hover:text-blue-800"
-                      >
+                      <button onClick={() => setExpandedId(null)} className="text-xs text-blue-600 mt-2 hover:text-blue-800">
                         Show less
                       </button>
                     )}

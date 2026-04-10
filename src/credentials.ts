@@ -2,7 +2,14 @@ import keytar from "keytar";
 
 const SERVICE = "linkdup";
 
-export type CredentialKey = "openrouter" | "apify";
+export type CredentialKey =
+  | "openrouter"
+  | "apify"
+  | "linkedin_client_id"
+  | "linkedin_client_secret"
+  | "linkedin_access_token"
+  | "linkedin_refresh_token"
+  | "linkedin_person_urn";
 
 export async function getCredential(key: CredentialKey): Promise<string | null> {
   return keytar.getPassword(SERVICE, key);

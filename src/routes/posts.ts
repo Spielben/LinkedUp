@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getDb } from "../db/index.js";
 import { callOpenRouter, estimateCost } from "../services/openrouter.js";
+import { publishTextPost, publishImagePost, publishComment } from "../services/linkedin.js";
 
 export const postsRouter = Router();
 
@@ -280,6 +281,90 @@ Retourne uniquement le post optimisé, sans commentaire ni explication.`;
     res.json(updated);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ── LinkedIn: Publish post ────────────────────────────────────────────────
+postsRouter.post("/:id/publish", async (req, res) => {
+  const db = getDb();
+  const post = db.prepare("SELECT * FROM posts WHERE id = ?").get(req.params.id) as Record<string, unknown> | undefined;
+
+  if (!post) return res.status(404).json({ error: "Post not found" });
+
+  const text = (post.final_version || post.selected_version) as string | null;
+  if (!text) return res.status(400).json({ error: "No final or selected version to publish" });
+
+  if (post.linkedin_post_id) {
+    return res.status(400).json({ error: "Post already published", linkedin_post_url: post.linkedin_post_url });
+  }
+
+  try {
+    // Publish text or text+image
+    let result: { postId: string; postUrl: string };
+    const imagePath = post.image_path as string | null;
+
+    if (imagePath) {
+      result = await publishImagePost(text, imagePath);
+    } else {
+      result = await publishTextPost(text);
+    }
+
+    // Update post record
+    db.prepare(`
+      UPDATE posts SET
+        linkedin_post_id = ?,
+        linkedin_post_url = ?,
+        status = 'Publie',
+        publication_date = datetime('now'),
+        publish_error = NULL
+      WHERE id = ?
+    `).run(result.postId, result.postUrl, req.params.id);
+
+    // Log success
+    db.prepare(`
+      INSERT INTO publish_log (post_id, action, status, response_body)
+      VALUES (?, 'publish', 'success', ?)
+    `).run(Number(req.params.id), JSON.stringify(result));
+
+    // Post first comment if present
+    const firstComment = post.first_comment as string | null;
+    if (firstComment && result.postId) {
+      try {
+        await publishComment(result.postId, firstComment);
+        db.prepare("UPDATE posts SET first_comment_posted = 1 WHERE id = ?").run(req.params.id);
+      } catch (commentErr: unknown) {
+        // Log comment error but don't fail the whole publish
+        const commentMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
+        db.prepare(`
+          INSERT INTO publish_log (post_id, action, status, response_body)
+          VALUES (?, 'first_comment', 'error', ?)
+        `).run(Number(req.params.id), commentMsg);
+      }
+    }
+
+    const updated = db.prepare(`
+      SELECT p.*, s.name as style_name, t.name as template_name, c.name as contenu_name
+      FROM posts p
+      LEFT JOIN styles s ON p.style_id = s.id
+      LEFT JOIN templates t ON p.template_id = t.id
+      LEFT JOIN contenus c ON p.contenu_id = c.id
+      WHERE p.id = ?
+    `).get(req.params.id);
+
+    res.json(updated);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+
+    // Store error on the post
+    db.prepare("UPDATE posts SET publish_error = ? WHERE id = ?").run(msg, req.params.id);
+
+    // Log failure
+    db.prepare(`
+      INSERT INTO publish_log (post_id, action, status, response_body)
+      VALUES (?, 'publish', 'error', ?)
+    `).run(Number(req.params.id), msg);
+
     res.status(500).json({ error: msg });
   }
 });

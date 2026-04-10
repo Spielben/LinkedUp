@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface SettingsData {
   name?: string;
@@ -11,13 +11,71 @@ interface SettingsData {
   preferred_post_time?: string;
 }
 
+interface LinkedInStatus {
+  connected: boolean;
+  name?: string;
+}
+
+const SUPPORTED_LANGUAGES = [
+  { code: "fr", label: "Français" },
+  { code: "en", label: "English" },
+  { code: "es", label: "Español" },
+  { code: "de", label: "Deutsch" },
+  { code: "pt", label: "Português" },
+  { code: "it", label: "Italiano" },
+  { code: "nl", label: "Nederlands" },
+] as const;
+
 export function Settings() {
   const [settings, setSettings] = useState<SettingsData>({});
   const [saved, setSaved] = useState(false);
+  const [linkedinStatus, setLinkedinStatus] = useState<LinkedInStatus>({ connected: false });
+  const [linkedinLoading, setLinkedinLoading] = useState(false);
+
+  const checkLinkedinStatus = useCallback(() => {
+    fetch("/api/linkedin/status").then((r) => r.json()).then(setLinkedinStatus);
+  }, []);
+
+  const connectLinkedin = async () => {
+    setLinkedinLoading(true);
+    try {
+      const res = await fetch("/api/linkedin/auth");
+      const { url } = await res.json();
+      const popup = window.open(url, "linkedin-auth", "width=600,height=700");
+
+      // Listen for the callback message
+      const handler = (e: MessageEvent) => {
+        if (e.data === "linkedin-connected") {
+          window.removeEventListener("message", handler);
+          checkLinkedinStatus();
+          setLinkedinLoading(false);
+        }
+      };
+      window.addEventListener("message", handler);
+
+      // Fallback: check status after popup closes
+      const interval = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(interval);
+          window.removeEventListener("message", handler);
+          checkLinkedinStatus();
+          setLinkedinLoading(false);
+        }
+      }, 1000);
+    } catch {
+      setLinkedinLoading(false);
+    }
+  };
+
+  const disconnectLinkedin = async () => {
+    await fetch("/api/linkedin/disconnect", { method: "POST" });
+    setLinkedinStatus({ connected: false });
+  };
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then(setSettings);
-  }, []);
+    checkLinkedinStatus();
+  }, [checkLinkedinStatus]);
 
   const save = () => {
     fetch("/api/settings", {
@@ -75,18 +133,16 @@ export function Settings() {
             value={settings.language || "fr"}
             onChange={(e) => setSettings({ ...settings, language: e.target.value })}
           >
-            <option value="fr">Français</option>
-            <option value="en">English</option>
-            <option value="es">Español</option>
-            <option value="de">Deutsch</option>
-            <option value="pt">Português</option>
-            <option value="it">Italiano</option>
-            <option value="nl">Nederlands</option>
+            {SUPPORTED_LANGUAGES.map((lang) => (
+              <option key={lang.code} value={lang.code}>
+                {lang.label}
+              </option>
+            ))}
           </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Monthly AI Budget (USD)</label>
-          <p className="text-xs text-gray-500 mb-2">OpenRouter spend cap</p>
+          <p className="text-xs text-gray-500 mb-2">OpenRouter monthly spend cap</p>
           <input
             type="number"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -97,10 +153,13 @@ export function Settings() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-3">Preferred Posting Days</label>
           <div className="grid grid-cols-7 gap-2">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, idx) => {
-              const dayNum = idx + 1;
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, idx) => {
+              const dayNum = idx;
               const daysString = settings.preferred_post_days || "";
-              const selectedDays = daysString.split(",").map((d) => parseInt(d.trim(), 10));
+              const selectedDays = daysString
+                .split(",")
+                .map((d) => parseInt(d.trim(), 10))
+                .filter((d) => !Number.isNaN(d));
               const isSelected = selectedDays.includes(dayNum);
 
               return (
@@ -145,6 +204,39 @@ export function Settings() {
         >
           {saved ? "Saved!" : "Save Settings"}
         </button>
+      </div>
+
+      <h3 className="text-lg font-semibold mt-8 mb-4">LinkedIn API</h3>
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        {linkedinStatus.connected ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="inline-block w-3 h-3 rounded-full bg-green-500" />
+              <span className="text-sm text-gray-700">
+                Connected{linkedinStatus.name ? ` as ${linkedinStatus.name}` : ""}
+              </span>
+            </div>
+            <button
+              onClick={disconnectLinkedin}
+              className="text-sm text-red-600 hover:text-red-700 font-medium"
+            >
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              Connect your LinkedIn account to publish posts directly from LINK'DUP.
+            </p>
+            <button
+              onClick={connectLinkedin}
+              disabled={linkedinLoading}
+              className="bg-[#0A66C2] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#004182] disabled:opacity-50"
+            >
+              {linkedinLoading ? "Connecting..." : "Connect LinkedIn"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

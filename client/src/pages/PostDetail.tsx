@@ -49,6 +49,8 @@ export function PostDetail() {
   const [generating, setGenerating] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPosts();
@@ -89,6 +91,25 @@ export function PostDetail() {
       setAiError(err instanceof Error ? err.message : String(err));
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const res = await fetch(`/api/posts/${post.id}/publish`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setPublishError(data.error || "Publication failed");
+      } else {
+        setPost(data);
+        await fetchPosts();
+      }
+    } catch (err: unknown) {
+      setPublishError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -322,6 +343,39 @@ export function PostDetail() {
               placeholder="e.g. Make it shorter, add more emojis, change the CTA..."
             />
           </div>
+
+          {/* Publish to LinkedIn */}
+          {publishError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between items-center">
+              <span>{publishError}</span>
+              <button onClick={() => setPublishError(null)} className="ml-3 text-red-400 hover:text-red-600">✕</button>
+            </div>
+          )}
+
+          {post.linkedin_post_url ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="text-sm text-green-800 font-medium">Published on LinkedIn</span>
+              </div>
+              <a
+                href={post.linkedin_post_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                View post &rarr;
+              </a>
+            </div>
+          ) : (
+            <button
+              className="w-full bg-[#0A66C2] text-white py-3 rounded-lg font-medium hover:bg-[#004182] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!(post.final_version || post.selected_version) || publishing}
+              onClick={handlePublish}
+            >
+              {publishing ? "Publishing..." : "Publish on LinkedIn"}
+            </button>
+          )}
         </div>
       </div>
     </div>

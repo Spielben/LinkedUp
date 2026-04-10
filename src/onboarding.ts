@@ -69,7 +69,7 @@ export async function runOnboarding(): Promise<boolean> {
     await setCredential("apify", apifyKey);
     console.log("        ✅ Stored securely\n");
   } else {
-    console.log("        ⏭️  Skipped (you can add it later in Settings)\n");
+    console.log("        ⏭️  Skipped (add later: security add-generic-password -s linkdup -a apify -w YOUR_KEY)\n");
   }
 
   // Step 3: LinkedIn URL

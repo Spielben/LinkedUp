@@ -10,13 +10,14 @@ import { settingsRouter } from "./routes/settings.js";
 import { seedRouter } from "./routes/seed.js";
 import { importRouter } from "./routes/import.js";
 import { linkedinPostsRouter } from "./routes/linkedin-posts.js";
+import { linkedinAuthRouter } from "./routes/linkedin-auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function createServer(port = 3000) {
   const app = express();
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 
   // API routes
   app.use("/api/posts", postsRouter);
@@ -27,6 +28,17 @@ export function createServer(port = 3000) {
   app.use("/api/seed", seedRouter);
   app.use("/api/import", importRouter);
   app.use("/api/linkedin-posts", linkedinPostsRouter);
+  app.use("/api/linkedin", linkedinAuthRouter);
+
+  // Serve downloaded images from data/images/
+  const imagesDir = path.join(process.cwd(), "data", "images");
+  console.log("  Serving images from:", imagesDir);
+  app.get("/data/images/:file", (req, res, next) => {
+    const filePath = path.join(imagesDir, req.params.file);
+    res.sendFile(filePath, (err) => {
+      if (err) next();
+    });
+  });
 
   // Serve built client in production
   const clientDist = path.join(__dirname, "../dist/client");

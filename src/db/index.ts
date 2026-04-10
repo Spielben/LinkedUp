@@ -55,9 +55,14 @@ function runMigrations(database: Database.Database): void {
     database.exec(`
       CREATE TABLE IF NOT EXISTS linkedin_posts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subject TEXT,
+        description TEXT,
         text TEXT,
+        image_url TEXT,
         published_date TEXT,
-        linkedin_url TEXT,
+        linkedin_url TEXT UNIQUE,
+        first_comment TEXT,
+        status TEXT DEFAULT 'published',
         likes INTEGER DEFAULT 0,
         comments INTEGER DEFAULT 0,
         shares INTEGER DEFAULT 0,
@@ -68,6 +73,28 @@ function runMigrations(database: Database.Database): void {
     `);
   } catch (e) {
     // Table already exists, ignore
+  }
+
+  // Migration: Add new columns to linkedin_posts if they don't exist
+  for (const col of [
+    "subject TEXT",
+    "description TEXT",
+    "image_url TEXT",
+    "first_comment TEXT",
+    "status TEXT DEFAULT 'published'",
+  ]) {
+    try {
+      database.exec(`ALTER TABLE linkedin_posts ADD COLUMN ${col}`);
+    } catch (e) {
+      // Column already exists
+    }
+  }
+
+  // Migration: Add UNIQUE constraint on linkedin_url (for dedup)
+  try {
+    database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_linkedin_posts_url ON linkedin_posts(linkedin_url)");
+  } catch (e) {
+    // Index already exists
   }
 }
 

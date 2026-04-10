@@ -20,10 +20,10 @@ contenusRouter.get("/:id", (req, res) => {
 
 contenusRouter.post("/", (req, res) => {
   const db = getDb();
-  const { name, description, url, type } = req.body;
+  const { name, description, url, type, content_raw } = req.body;
   const result = db.prepare(
-    "INSERT INTO contenus (name, description, url, type) VALUES (?, ?, ?, ?)"
-  ).run(name, description || null, url || null, type || null);
+    "INSERT INTO contenus (name, description, url, type, content_raw) VALUES (?, ?, ?, ?, ?)"
+  ).run(name, description || null, url || null, type || null, content_raw || null);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
