@@ -1,5 +1,5 @@
 /**
- * LinkedIn character counter — matches KONTENU's custom counting rules.
+ * LinkedIn character counter — custom counting rules for LinkedIn posts.
  * Emojis count as 2 characters, bold Unicode counts as 2, everything else is 1.
  */
 
