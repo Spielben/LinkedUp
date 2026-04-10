@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { useStylesStore } from "../stores/styles";
 
 export function StylesList() {
-  const { styles, loading, fetch: fetchStyles, create: createStyle } = useStylesStore();
+  const { styles, loading, fetch: fetchStyles, create: createStyle, remove: deleteStyle } = useStylesStore();
   const [generatingId, setGeneratingId] = useState<number | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ name: "", linkedin_url: "", examples: "" });
 
   useEffect(() => {
     fetchStyles();
@@ -24,20 +27,86 @@ export function StylesList() {
     }
   };
 
+  const handleDelete = async (id: number) => {
+    if (confirm("Delete this style?")) {
+      await deleteStyle(id);
+    }
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) return;
+    await createStyle(formData);
+    setFormData({ name: "", linkedin_url: "", examples: "" });
+    setShowForm(false);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Styles</h2>
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-          onClick={() => {
-            const name = prompt("Style name:");
-            if (name) createStyle({ name });
-          }}
+          onClick={() => setShowForm(!showForm)}
         >
           + New Style
         </button>
       </div>
+
+      {showForm && (
+        <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="font-medium mb-4">Create New Style</h3>
+          <form onSubmit={handleCreateSubmit} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <input
+                type="text"
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn URL (optional)</label>
+              <input
+                type="url"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                value={formData.linkedin_url}
+                onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Examples (optional)</label>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                rows={4}
+                value={formData.examples}
+                onChange={(e) => setFormData({ ...formData, examples: e.target.value })}
+                placeholder="Paste LinkedIn posts to analyze..."
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                Create
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  setFormData({ name: "", linkedin_url: "", examples: "" });
+                }}
+                className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-gray-400">Loading...</p>
@@ -54,11 +123,11 @@ export function StylesList() {
           <div className="grid gap-4">
             {styles.map((style) => (
               <div key={style.id} className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium">{style.name}</h3>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1 cursor-pointer" onClick={() => setExpandedId(expandedId === style.id ? null : style.id)}>
+                    <h3 className="font-medium hover:text-blue-600">{style.name}</h3>
                     {style.linkedin_url && (
-                      <a href={style.linkedin_url} target="_blank" className="text-sm text-blue-600 mt-1 block">
+                      <a href={style.linkedin_url} target="_blank" onClick={(e) => e.stopPropagation()} className="text-sm text-blue-600 mt-1 block">
                         {style.linkedin_url}
                       </a>
                     )}
@@ -78,10 +147,28 @@ export function StylesList() {
                         {generatingId === style.id ? "Generating…" : "✨ Generate"}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleDelete(style.id)}
+                      className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
                 {style.instructions && (
-                  <p className="text-sm text-gray-600 mt-3 line-clamp-3">{style.instructions}</p>
+                  <div>
+                    <p className={`text-sm text-gray-600 mt-3 ${expandedId === style.id ? "" : "line-clamp-3"}`}>
+                      {style.instructions}
+                    </p>
+                    {expandedId === style.id && (
+                      <button
+                        onClick={() => setExpandedId(null)}
+                        className="text-xs text-blue-600 mt-2 hover:text-blue-800"
+                      >
+                        Show less
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
