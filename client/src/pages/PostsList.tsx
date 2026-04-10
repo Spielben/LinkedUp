@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router";
 import { usePostsStore } from "../stores/posts";
 
 const statusColors: Record<string, string> = {
@@ -13,10 +13,23 @@ const statusColors: Record<string, string> = {
 export function PostsList() {
   const { posts, loading, fetch: fetchPosts, create: createPost } = usePostsStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [filteredPosts, setFilteredPosts] = useState(posts);
+
+  const params = new URLSearchParams(location.search);
+  const statusFilter = params.get("status");
 
   useEffect(() => {
     fetchPosts();
   }, []);
+
+  useEffect(() => {
+    if (statusFilter) {
+      setFilteredPosts(posts.filter((p) => p.status === statusFilter));
+    } else {
+      setFilteredPosts(posts);
+    }
+  }, [posts, statusFilter]);
 
   const handleNew = async () => {
     const post = await createPost({ subject: "New post" });
@@ -26,7 +39,20 @@ export function PostsList() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Posts</h2>
+        <div>
+          <h2 className="text-2xl font-bold">Posts</h2>
+          {statusFilter && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-sm text-gray-600">Filtering by: <strong>{statusFilter}</strong></span>
+              <button
+                onClick={() => navigate("/posts")}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                Clear filter
+              </button>
+            </div>
+          )}
+        </div>
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
           onClick={handleNew}
@@ -37,8 +63,8 @@ export function PostsList() {
 
       {loading ? (
         <p className="text-gray-400">Loading...</p>
-      ) : posts.length === 0 ? (
-        <p className="text-gray-500">No posts yet. Create your first one!</p>
+      ) : filteredPosts.length === 0 ? (
+        <p className="text-gray-500">{statusFilter ? `No posts with status "${statusFilter}".` : "No posts yet. Create your first one!"}</p>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
@@ -51,7 +77,7 @@ export function PostsList() {
               </tr>
             </thead>
             <tbody>
-              {posts.map((post) => (
+              {filteredPosts.map((post) => (
                 <tr
                   key={post.id}
                   className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"

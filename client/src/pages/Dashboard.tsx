@@ -1,10 +1,12 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePostsStore } from "../stores/posts";
 import { useStylesStore } from "../stores/styles";
 import { useTemplatesStore } from "../stores/templates";
 import { useContenusStore } from "../stores/contenus";
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const posts = usePostsStore((s) => s.posts);
   const styles = useStylesStore((s) => s.styles);
   const templates = useTemplatesStore((s) => s.templates);
@@ -54,10 +56,30 @@ export function Dashboard() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="font-medium mb-3">Post Status</h3>
           <div className="flex gap-6 text-sm">
-            <span className="text-green-600">{published} published</span>
-            <span className="text-teal-600">{scheduled} scheduled</span>
-            <span className="text-blue-600">{drafts} drafts</span>
-            <span className="text-yellow-600">{posts.length - published - scheduled - drafts} ideas</span>
+            <button
+              onClick={() => navigate("/posts?status=Publié")}
+              className="text-green-600 hover:text-green-800 hover:underline cursor-pointer"
+            >
+              {published} published
+            </button>
+            <button
+              onClick={() => navigate("/posts?status=Programmé")}
+              className="text-teal-600 hover:text-teal-800 hover:underline cursor-pointer"
+            >
+              {scheduled} scheduled
+            </button>
+            <button
+              onClick={() => navigate("/posts?status=Brouillon")}
+              className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+            >
+              {drafts} drafts
+            </button>
+            <button
+              onClick={() => navigate("/posts?status=Idée")}
+              className="text-yellow-600 hover:text-yellow-800 hover:underline cursor-pointer"
+            >
+              {posts.length - published - scheduled - drafts} ideas
+            </button>
           </div>
         </div>
       )}
