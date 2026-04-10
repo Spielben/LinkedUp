@@ -98,15 +98,15 @@ linkedinPostsRouter.post("/scrape", async (req, res) => {
       throw new Error(`Apify API error: ${apifyRes.statusText}`);
     }
 
-    const runData = (await apifyRes.json()) as Record<string, unknown>;
-    const runId = runData.data?.id as string;
+    const runData = (await apifyRes.json()) as { data?: { id: string } };
+    const runId = runData.data?.id;
 
     if (!runId) {
       throw new Error("Failed to start Apify run");
     }
 
     // Wait for run to complete
-    let runStatus: Record<string, unknown> = {};
+    let runStatus: { data?: { status: string; defaultDatasetId: string } } = {};
     let attempts = 0;
     const maxAttempts = 120; // 2 minutes with 1 second intervals
 
@@ -120,7 +120,7 @@ linkedinPostsRouter.post("/scrape", async (req, res) => {
 
       if (!statusRes.ok) break;
 
-      runStatus = (await statusRes.json()) as Record<string, unknown>;
+      runStatus = (await statusRes.json()) as { data?: { status: string; defaultDatasetId: string } };
 
       if (runStatus.data?.status === "SUCCEEDED") break;
       if (runStatus.data?.status === "FAILED") {
@@ -132,7 +132,7 @@ linkedinPostsRouter.post("/scrape", async (req, res) => {
     }
 
     // Get results from dataset
-    const datasetId = runStatus.data?.defaultDatasetId as string;
+    const datasetId = runStatus.data?.defaultDatasetId;
     if (!datasetId) {
       throw new Error("No dataset from Apify run");
     }

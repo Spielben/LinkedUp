@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { usePostsStore } from "../stores/posts";
 import { useStylesStore } from "../stores/styles";
 import { useTemplatesStore } from "../stores/templates";
