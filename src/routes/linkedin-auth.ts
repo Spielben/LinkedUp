@@ -3,17 +3,22 @@ import {
   buildAuthUrl,
   exchangeCodeForToken,
   getConnectionStatus,
+  LINKEDIN_REDIRECT_URI,
+  parseOAuthState,
 } from "../services/linkedin.js";
 import {
   deleteCredential,
+  getCredential,
 } from "../credentials.js";
 
 export const linkedinAuthRouter = Router();
 
-// GET /api/linkedin/auth — Redirect to LinkedIn OAuth
-linkedinAuthRouter.get("/auth", async (_req, res) => {
+// GET /api/linkedin/auth — JSON { url } for popup or same-tab OAuth
+// Query: return_origin — frontend origin (e.g. http://localhost:5173) for postMessage after redirect
+linkedinAuthRouter.get("/auth", async (req, res) => {
   try {
-    const url = await buildAuthUrl();
+    const ro = typeof req.query.return_origin === "string" ? req.query.return_origin : undefined;
+    const url = await buildAuthUrl(ro);
     res.json({ url });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -21,31 +26,64 @@ linkedinAuthRouter.get("/auth", async (_req, res) => {
   }
 });
 
-// GET /api/linkedin/callback — OAuth callback from LinkedIn
+// GET /api/linkedin/setup — safe diagnostics (no secrets)
+linkedinAuthRouter.get("/setup", async (_req, res) => {
+  const hasClientId = !!(await getCredential("linkedin_client_id"));
+  const hasClientSecret = !!(await getCredential("linkedin_client_secret"));
+  res.json({
+    hasClientId,
+    hasClientSecret,
+    redirectUri: LINKEDIN_REDIRECT_URI,
+    checklist: [
+      "LinkedIn app → Auth: add Authorized redirect URL exactly: http://localhost:3000/api/linkedin/callback",
+      "Products: Sign In with LinkedIn (OpenID) + Share on LinkedIn (w_member_social)",
+      "Keychain: linkedin_client_id and linkedin_client_secret under service name linkdup",
+    ],
+  });
+});
+
+// GET /api/linkedin/callback — OAuth callback from LinkedIn (opens in popup)
 linkedinAuthRouter.get("/callback", async (req, res) => {
+  const stateParam = typeof req.query.state === "string" ? req.query.state : undefined;
+  const { postMessageOrigin } = parseOAuthState(stateParam);
+  const originJs = JSON.stringify(postMessageOrigin);
+
   const { code, error, error_description } = req.query;
 
+  const safeErr = (s: string) =>
+    String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
   if (error) {
+    const detail = safeErr(String(error_description || error || "unknown"));
     return res.status(400).send(
-      `<html><body><h2>LinkedIn authorization failed</h2><p>${error_description || error}</p><script>window.close()</script></body></html>`
+      `<!DOCTYPE html><html><body><h2>LinkedIn authorization failed</h2><p>${detail}</p>
+<script>(function(){var o=${originJs};try{if(window.opener)window.opener.postMessage({type:"linkedin-oauth-error",detail:${JSON.stringify(String(error_description || error))}},o);}catch(e){}})();setTimeout(function(){window.close();},800);</script></body></html>`
     );
   }
 
   if (!code || typeof code !== "string") {
     return res.status(400).send(
-      `<html><body><h2>Missing authorization code</h2><script>window.close()</script></body></html>`
+      `<!DOCTYPE html><html><body><h2>Missing authorization code</h2>
+<script>(function(){var o=${originJs};try{if(window.opener)window.opener.postMessage({type:"linkedin-oauth-error",detail:"missing_code"},o);}catch(e){}})();setTimeout(function(){window.close();},800);</script></body></html>`
     );
   }
 
   try {
     await exchangeCodeForToken(code);
     res.send(
-      `<html><body><h2>LinkedIn connected successfully!</h2><p>You can close this window.</p><script>window.opener?.postMessage("linkedin-connected","*");window.close()</script></body></html>`
+      `<!DOCTYPE html><html><body><h2>LinkedIn connected</h2><p>You can close this window.</p>
+<script>(function(){var o=${originJs};try{if(window.opener)window.opener.postMessage("linkedin-connected",o);}catch(e){}})();setTimeout(function(){window.close();},300);</script></body></html>`
     );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    const safe = safeErr(msg);
     res.status(500).send(
-      `<html><body><h2>Error connecting LinkedIn</h2><p>${msg}</p><script>window.close()</script></body></html>`
+      `<!DOCTYPE html><html><body><h2>Error connecting LinkedIn</h2><p>${safe}</p>
+<script>(function(){var o=${originJs};try{if(window.opener)window.opener.postMessage({type:"linkedin-oauth-error",detail:${JSON.stringify(msg)}},o);}catch(e){}})();setTimeout(function(){window.close();},1200);</script></body></html>`
     );
   }
 });

@@ -6,8 +6,46 @@ const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_API_BASE = "https://api.linkedin.com";
 
-const REDIRECT_URI = "http://localhost:3000/api/linkedin/callback";
+export const LINKEDIN_REDIRECT_URI = "http://localhost:3000/api/linkedin/callback";
+const REDIRECT_URI = LINKEDIN_REDIRECT_URI;
 const SCOPES = "openid profile w_member_social";
+
+/** Only http(s) localhost / 127.0.0.1 — used for postMessage targetOrigin after OAuth */
+export function isAllowedOAuthReturnOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    return (
+      u.hostname === "localhost" ||
+      u.hostname === "127.0.0.1" ||
+      u.hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
+}
+
+export type ParsedOAuthState = { postMessageOrigin: string };
+
+/** Decode state from LinkedIn callback (embeds frontend origin for postMessage). */
+export function parseOAuthState(state: string | undefined): ParsedOAuthState {
+  if (!state || typeof state !== "string") {
+    return { postMessageOrigin: "*" };
+  }
+  try {
+    const json = JSON.parse(Buffer.from(state, "base64url").toString("utf8")) as {
+      v?: number;
+      o?: string;
+      x?: string;
+    };
+    if (json.v === 1 && typeof json.o === "string" && isAllowedOAuthReturnOrigin(json.o)) {
+      return { postMessageOrigin: json.o };
+    }
+  } catch {
+    // legacy: random alphanumeric state from older builds
+  }
+  return { postMessageOrigin: "*" };
+}
 
 // ── OAuth helpers ──────────────────────────────────────────────────────────
 
@@ -22,11 +60,26 @@ export function getAuthUrl(state: string): string {
   return `${LINKEDIN_AUTH_URL}?${params.toString()}`;
 }
 
-export async function buildAuthUrl(): Promise<string> {
+export async function buildAuthUrl(returnOrigin?: string): Promise<string> {
   const clientId = await getCredential("linkedin_client_id");
-  if (!clientId) throw new Error("LinkedIn Client ID not configured");
+  if (!clientId) {
+    throw new Error(
+      "LinkedIn Client ID not in Keychain. Run: security add-generic-password -s linkdup -a linkedin_client_id -w YOUR_CLIENT_ID"
+    );
+  }
 
-  const state = Math.random().toString(36).slice(2);
+  let originForMessage = "http://localhost:5173";
+  if (returnOrigin && isAllowedOAuthReturnOrigin(returnOrigin)) {
+    originForMessage = returnOrigin;
+  }
+
+  const statePayload = {
+    v: 1 as const,
+    o: originForMessage,
+    x: Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2),
+  };
+  const state = Buffer.from(JSON.stringify(statePayload), "utf8").toString("base64url");
+
   const params = new URLSearchParams({
     response_type: "code",
     client_id: clientId,

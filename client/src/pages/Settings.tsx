@@ -33,6 +33,12 @@ export function Settings() {
   const [linkedinStatus, setLinkedinStatus] = useState<LinkedInStatus>({ connected: false });
   const [linkedinLoading, setLinkedinLoading] = useState(false);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
+  const [linkedinSetup, setLinkedinSetup] = useState<{
+    hasClientId: boolean;
+    hasClientSecret: boolean;
+    redirectUri: string;
+    checklist: string[];
+  } | null>(null);
 
   const checkLinkedinStatus = useCallback(async () => {
     try {
@@ -48,7 +54,8 @@ export function Settings() {
     setLinkedinLoading(true);
     setLinkedinError(null);
     try {
-      const res = await apiFetch("/api/linkedin/auth");
+      const ro = encodeURIComponent(window.location.origin);
+      const res = await apiFetch(`/api/linkedin/auth?return_origin=${ro}`);
       const data = await readApiJson<{ url?: string; error?: string }>(res);
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
@@ -62,21 +69,35 @@ export function Settings() {
         throw new Error("Popup blocked — allow popups for this site and try again.");
       }
 
-      // Listen for the callback message
+      let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+      const cleanup = () => {
+        window.removeEventListener("message", handler);
+        if (pollTimer !== null) {
+          window.clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      };
+
       const handler = (e: MessageEvent) => {
         if (e.data === "linkedin-connected") {
-          window.removeEventListener("message", handler);
+          cleanup();
           void checkLinkedinStatus();
+          setLinkedinLoading(false);
+          return;
+        }
+        if (e.data && typeof e.data === "object" && e.data.type === "linkedin-oauth-error") {
+          cleanup();
+          setLinkedinError(String((e.data as { detail?: string }).detail || "LinkedIn authorization failed"));
           setLinkedinLoading(false);
         }
       };
+
       window.addEventListener("message", handler);
 
-      // Fallback: check status after popup closes
-      const interval = setInterval(() => {
+      pollTimer = window.setInterval(() => {
         if (popup?.closed) {
-          clearInterval(interval);
-          window.removeEventListener("message", handler);
+          cleanup();
           void checkLinkedinStatus();
           setLinkedinLoading(false);
         }
@@ -102,6 +123,14 @@ export function Settings() {
       }
     })();
     void checkLinkedinStatus();
+    void (async () => {
+      try {
+        const res = await apiFetch("/api/linkedin/setup");
+        setLinkedinSetup(await readApiJson(res));
+      } catch {
+        setLinkedinSetup(null);
+      }
+    })();
   }, [checkLinkedinStatus]);
 
   const save = () => {
@@ -237,6 +266,26 @@ export function Settings() {
 
       <h3 className="text-lg font-semibold mt-8 mb-4">LinkedIn API</h3>
       <div className="bg-white rounded-lg border border-gray-200 p-6">
+        {linkedinSetup && (!linkedinSetup.hasClientId || !linkedinSetup.hasClientSecret) && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-900">
+            <p className="font-medium mb-2">LinkedIn app credentials missing in Keychain</p>
+            <p className="mb-2 text-amber-800">
+              Store <code className="bg-amber-100 px-1 rounded">linkedin_client_id</code> and{" "}
+              <code className="bg-amber-100 px-1 rounded">linkedin_client_secret</code> for service{" "}
+              <code className="bg-amber-100 px-1 rounded">linkdup</code> (see terminal:{" "}
+              <code className="bg-amber-100 px-1 rounded">security add-generic-password</code>).
+            </p>
+            <p className="text-xs text-amber-800 mb-1">
+              Redirect URL in LinkedIn Developer Portal must be exactly:{" "}
+              <code className="break-all">{linkedinSetup.redirectUri}</code>
+            </p>
+            <ul className="list-disc list-inside text-xs text-amber-800 space-y-1 mt-2">
+              {linkedinSetup.checklist.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {linkedinError && (
           <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between gap-2">
             <span>{linkedinError}</span>
