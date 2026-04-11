@@ -6,3 +6,6 @@ dist/
 data/
 *.db
 *.sqlite
+
+# Local IDE / agent settings (machine-specific, not shared)
+.claude/settings.local.json

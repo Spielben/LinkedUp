@@ -237,18 +237,33 @@ Commit: `feat: Spielben & Co. logo in sidebar`
 
 ## TASK 10 — LinkedIn post history (import + display)
 
-### Option A — LinkedIn data export (CSV/JSON from LinkedIn)
-- When user receives the export, parse the posts file
+### Status of LinkedIn data
+
+A "Basic" export was downloaded (~/Downloads/Basic_LinkedInDataExport_04-10-2026.zip) but it does NOT contain posts — only Profile.csv, Invitations.csv, and 1 article.
+See `data/linkedin-export-notes.md` for details and extracted profile data.
+
+User has been asked to request a full export with "Posts/Shares" selected. It may arrive later.
+
+### Profile data (pre-fill settings if empty)
+- Name: Ben Spielben
+- Headline: Director & Producer | Leading Full-Service Production in Southeast Asia | Spielben & Co.
+- Location: Phuket, Thailand
+- Website: https://www.spielben.com
+- LinkedIn: https://www.linkedin.com/in/ben-spielben/
+
+### Option A — LinkedIn data export (full, when it arrives)
+- Look for `Shares.csv` or `Posts.csv` in the ZIP
 - Route: `POST /api/linkedin-posts/import` — accepts the LinkedIn export file
 - Parse and insert into `linkedin_posts` table
+- If file not found in ~/Downloads/, skip and rely on Option B
 
-### Option B — Apify scraper
+### Option B — Apify scraper (PREFERRED — key is stored)
 - Route: `POST /api/linkedin-posts/scrape`
-- Use Apify LinkedIn Profile Scraper actor (actor ID: `curious_coder/linkedin-profile-scraper` or `anchor/linkedin-scraper`)
+- Use Apify LinkedIn Profile Scraper actor
 - Read API key via `getCredential("apify")`
 - Call Apify API: start actor run → wait for dataset → fetch results
 - Parse posts from results → insert into `linkedin_posts` table
-- LinkedIn profile URL: read from settings.linkedin_url
+- LinkedIn profile URL: https://www.linkedin.com/in/ben-spielben/ (or read from settings.linkedin_url)
 
 ### Frontend — new page `client/src/pages/LinkedInHistory.tsx`
 - Add to sidebar nav in App.tsx: "LinkedIn" with route `/linkedin`
