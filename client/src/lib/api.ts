@@ -13,8 +13,24 @@ export function apiUrl(path: string): string {
   return p;
 }
 
-export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(apiUrl(path), init);
+export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const url = apiUrl(path);
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    let origin: string;
+    try {
+      origin = new URL(url).origin;
+    } catch {
+      origin = url;
+    }
+    if (e instanceof TypeError) {
+      throw new Error(
+        `Cannot reach the API (${origin}). Open a terminal, cd into the linkdup project folder, run: npm run dev — the server must be listening on port 3000. If you use another host/port, set VITE_API_ORIGIN in client/.env (e.g. VITE_API_ORIGIN=http://localhost:3000).`
+      );
+    }
+    throw e;
+  }
 }
 
 /** Parse JSON or throw a clear error if the server returned HTML (SPA fallback) or non-JSON. */
