@@ -1,9 +1,25 @@
 const API_ORIGINS = new Set(["http://localhost:3000", "http://127.0.0.1:3000"]);
 
+/** LAN / machine-local hosts where the API is expected on the same hostname, port 3000 */
+function isLikelyLocalDevHost(hostname: string): boolean {
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  ) {
+    return true;
+  }
+  if (hostname.endsWith(".local")) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  return false;
+}
+
 /**
- * Use absolute URL to the Express API when the UI is not served from the same origin
- * (Vite dev :5173, vite preview, etc.). Production build opened on :3000 uses relative /api.
- * Override with VITE_API_ORIGIN in client/.env when needed.
+ * Use absolute URL to Express (:3000) when the UI is on another port (Vite, preview, --host).
+ * Same host as the page for LAN; override with VITE_API_ORIGIN in client/.env.
  */
 export function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -14,18 +30,24 @@ export function apiUrl(path: string): string {
   }
 
   if (typeof window !== "undefined") {
+    const { protocol, hostname, port } = window.location;
     const origin = window.location.origin;
+
     if (API_ORIGINS.has(origin)) {
       return p;
     }
-    const h = window.location.hostname;
-    const port = window.location.port;
-    const isLoopback =
-      h === "localhost" || h === "127.0.0.1" || h === "[::1]";
-    // Vite dev/preview (:5173, :4173, …): API stays on :3000
-    if (isLoopback && port !== "3000") {
+
+    if (protocol === "file:" || !hostname) {
       return `http://127.0.0.1:3000${p}`;
     }
+
+    const uiPort = port || (protocol === "https:" ? "443" : "80");
+    const onDefaultApiPort = uiPort === "3000";
+
+    if (isLikelyLocalDevHost(hostname) && !onDefaultApiPort) {
+      return `${protocol}//${hostname}:3000${p}`;
+    }
+
     return p;
   }
 

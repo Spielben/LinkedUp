@@ -14,16 +14,29 @@ import { linkedinAuthRouter } from "./routes/linkedin-auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function isAllowedDevCorsOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    const h = u.hostname;
+    if (h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1") return true;
+    if (h.endsWith(".local")) return true;
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function createServer(port = 3000) {
   const app = express();
 
-  // Allow Vite dev (e.g. :5173) to call API on :3000 without relying on proxy alone
+  // CORS: Vite on :5173 / preview / vite --host (LAN) → API on :3000
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (
-      typeof origin === "string" &&
-      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
-    ) {
+    if (typeof origin === "string" && isAllowedDevCorsOrigin(origin)) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Vary", "Origin");
       res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
