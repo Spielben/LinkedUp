@@ -8,7 +8,9 @@ const LINKEDIN_API_BASE = "https://api.linkedin.com";
 
 export const LINKEDIN_REDIRECT_URI = "http://localhost:3000/api/linkedin/callback";
 const REDIRECT_URI = LINKEDIN_REDIRECT_URI;
-const SCOPES = "openid profile w_member_social";
+// Only request w_member_social — "Sign In with LinkedIn using OpenID Connect"
+// product is not required. openid/profile scopes are fetched via fallback logic.
+const SCOPES = "w_member_social";
 
 /** Only http(s) localhost / 127.0.0.1 — used for postMessage targetOrigin after OAuth */
 export function isAllowedOAuthReturnOrigin(origin: string): boolean {
@@ -178,18 +180,99 @@ export async function refreshAccessToken(): Promise<string> {
 
 // ── Person URN ─────────────────────────────────────────────────────────────
 
-async function fetchPersonUrn(accessToken: string): Promise<string> {
-  const res = await fetch(`${LINKEDIN_API_BASE}/v2/userinfo`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+/**
+ * Decode the JWT payload to extract the `sub` claim (LinkedIn person ID).
+ * LinkedIn access tokens are JWTs — this works without any extra API scope.
+ */
+function extractSubFromJwt(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(
+      Buffer.from(parts[1], "base64url").toString("utf-8")
+    ) as Record<string, unknown>;
+    return typeof payload.sub === "string" && payload.sub ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`LinkedIn userinfo failed (${res.status}): ${errText}`);
+/**
+ * Fetch LinkedIn person ID using multiple fallback methods:
+ * 1. JWT decode (works if token is a JWT — quick, no API call)
+ * 2. Token introspection (works with any token + client credentials, no extra scope)
+ * 3. /v2/userinfo (requires openid scope — OpenID Connect product)
+ * 4. /v2/me (legacy, requires r_liteprofile or profile scope)
+ */
+async function fetchPersonUrn(accessToken: string): Promise<string> {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+
+  // Method 1: decode JWT payload — works if LinkedIn issued a JWT access token
+  const jwtSub = extractSubFromJwt(accessToken);
+  if (jwtSub) return jwtSub;
+
+  // Method 2: token introspection — works with w_member_social only, needs client creds
+  try {
+    const clientId = await getCredential("linkedin_client_id");
+    const clientSecret = await getCredential("linkedin_client_secret");
+    if (clientId && clientSecret) {
+      const res = await fetch(
+        "https://www.linkedin.com/oauth/v2/introspectToken",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            token: accessToken,
+            client_id: clientId,
+            client_secret: clientSecret,
+          }),
+        }
+      );
+      if (res.ok) {
+        const data = (await res.json()) as {
+          active?: boolean;
+          authorized_user?: string;
+        };
+        if (data.active && data.authorized_user) {
+          // authorized_user = "urn:li:member:12345678" — extract the numeric ID
+          const match = data.authorized_user.match(
+            /urn:li:(?:member|person):(\w+)/
+          );
+          if (match) return match[1];
+        }
+      }
+    }
+  } catch {
+    // continue
   }
 
-  const data = (await res.json()) as { sub: string; name?: string };
-  return data.sub;
+  // Method 3: OpenID Connect userinfo (requires openid scope)
+  try {
+    const res = await fetch(`${LINKEDIN_API_BASE}/v2/userinfo`, { headers });
+    if (res.ok) {
+      const data = (await res.json()) as { sub?: string };
+      if (data.sub) return data.sub;
+    }
+  } catch {
+    // continue
+  }
+
+  // Method 4: legacy /v2/me (requires profile or r_liteprofile scope)
+  try {
+    const res = await fetch(`${LINKEDIN_API_BASE}/v2/me`, { headers });
+    if (res.ok) {
+      const data = (await res.json()) as { id?: string };
+      if (data.id) return data.id;
+    }
+  } catch {
+    // continue
+  }
+
+  throw new Error(
+    "Could not determine your LinkedIn person ID. " +
+      "Make sure the 'Share on LinkedIn' product is active on your LinkedIn Developer App " +
+      "and that your Client ID / Secret are stored correctly in Keychain."
+  );
 }
 
 // ── Get valid access token (auto-refresh if needed) ────────────────────────
@@ -405,16 +488,41 @@ export async function getConnectionStatus(): Promise<{
   const token = await getCredential("linkedin_access_token");
   if (!token) return { connected: false };
 
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // Try OpenID userinfo first (works if app has "Sign In with LinkedIn" product)
   try {
-    const res = await fetch(`${LINKEDIN_API_BASE}/v2/userinfo`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) return { connected: false };
-
-    const data = (await res.json()) as { name?: string; sub?: string };
-    return { connected: true, name: data.name };
+    const res = await fetch(`${LINKEDIN_API_BASE}/v2/userinfo`, { headers });
+    if (res.status === 401) return { connected: false };
+    if (res.ok) {
+      const data = (await res.json()) as { name?: string };
+      return { connected: true, name: data.name };
+    }
   } catch {
-    return { connected: false };
+    // continue
   }
+
+  // Try legacy /v2/me (works if profile/r_liteprofile scope is available)
+  try {
+    const res = await fetch(`${LINKEDIN_API_BASE}/v2/me`, { headers });
+    if (res.status === 401) return { connected: false };
+    if (res.ok) {
+      const data = (await res.json()) as {
+        localizedFirstName?: string;
+        localizedLastName?: string;
+      };
+      const name = [data.localizedFirstName, data.localizedLastName]
+        .filter(Boolean)
+        .join(" ");
+      return { connected: true, name: name || undefined };
+    }
+  } catch {
+    // continue
+  }
+
+  // Token exists and neither endpoint returned 401 — assume connected for posting
+  const urn = await getCredential("linkedin_person_urn").catch(() => null);
+  if (urn) return { connected: true };
+
+  return { connected: false };
 }
