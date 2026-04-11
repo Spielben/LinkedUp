@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { apiFetch } from "../lib/api";
 
 export interface Template {
   id: number;
@@ -32,22 +33,22 @@ export const useTemplatesStore = create<TemplatesStore>((set, get) => ({
 
   fetch: async () => {
     set({ loading: true });
-    const res = await fetch("/api/templates");
+    const res = await apiFetch("/api/templates");
     const templates = await res.json();
     set({ templates, loading: false });
   },
 
   create: async (data) => {
-    await fetch("/api/templates", {
+    await apiFetch("/api/templates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    await get().fetch();
+    await get().apiFetch();
   },
 
   update: async (id, data) => {
-    const res = await fetch(`/api/templates/${id}`, {
+    const res = await apiFetch(`/api/templates/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -57,7 +58,7 @@ export const useTemplatesStore = create<TemplatesStore>((set, get) => ({
   },
 
   remove: async (id) => {
-    await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/templates/${id}`, { method: "DELETE" });
     set({ templates: get().templates.filter((t) => t.id !== id) });
   },
 }));

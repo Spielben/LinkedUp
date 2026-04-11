@@ -5,6 +5,7 @@ import { useStylesStore } from "../stores/styles";
 import { useTemplatesStore } from "../stores/templates";
 import { useContenusStore } from "../stores/contenus";
 import { countLinkedInChars } from "../lib/linkedin-chars";
+import { apiFetch, readApiJson } from "../lib/api";
 
 const STATUS_OPTIONS = ["Idée", "Brouillon", "Programmé", "Publié"];
 const VERSION_OPTIONS = ["V1", "V2", "V3"];
@@ -98,8 +99,8 @@ export function PostDetail() {
     setPublishing(true);
     setPublishError(null);
     try {
-      const res = await fetch(`/api/posts/${post.id}/publish`, { method: "POST" });
-      const data = await res.json();
+      const res = await apiFetch(`/api/posts/${post.id}/publish`, { method: "POST" });
+      const data = await readApiJson<Post & { error?: string }>(res);
       if (!res.ok) {
         setPublishError(data.error || "Publication failed");
       } else {

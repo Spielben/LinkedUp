@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { apiFetch } from "../lib/api";
 
 export interface Style {
   id: number;
@@ -25,22 +26,22 @@ export const useStylesStore = create<StylesStore>((set, get) => ({
 
   fetch: async () => {
     set({ loading: true });
-    const res = await fetch("/api/styles");
+    const res = await apiFetch("/api/styles");
     const styles = await res.json();
     set({ styles, loading: false });
   },
 
   create: async (data) => {
-    await fetch("/api/styles", {
+    await apiFetch("/api/styles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    await get().fetch();
+    await get().apiFetch();
   },
 
   update: async (id, data) => {
-    const res = await fetch(`/api/styles/${id}`, {
+    const res = await apiFetch(`/api/styles/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -50,7 +51,7 @@ export const useStylesStore = create<StylesStore>((set, get) => ({
   },
 
   remove: async (id) => {
-    await fetch(`/api/styles/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/styles/${id}`, { method: "DELETE" });
     set({ styles: get().styles.filter((s) => s.id !== id) });
   },
 }));

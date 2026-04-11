@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { apiFetch, readApiJson } from "../lib/api";
 
 interface SettingsData {
   name?: string;
@@ -31,23 +32,41 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [linkedinStatus, setLinkedinStatus] = useState<LinkedInStatus>({ connected: false });
   const [linkedinLoading, setLinkedinLoading] = useState(false);
+  const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
-  const checkLinkedinStatus = useCallback(() => {
-    fetch("/api/linkedin/status").then((r) => r.json()).then(setLinkedinStatus);
+  const checkLinkedinStatus = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/linkedin/status");
+      const data = await readApiJson<LinkedInStatus>(res);
+      setLinkedinStatus(data);
+    } catch {
+      setLinkedinStatus({ connected: false });
+    }
   }, []);
 
   const connectLinkedin = async () => {
     setLinkedinLoading(true);
+    setLinkedinError(null);
     try {
-      const res = await fetch("/api/linkedin/auth");
-      const { url } = await res.json();
+      const res = await apiFetch("/api/linkedin/auth");
+      const data = await readApiJson<{ url?: string; error?: string }>(res);
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const url = data.url;
+      if (!url) {
+        throw new Error("No OAuth URL returned from server");
+      }
       const popup = window.open(url, "linkedin-auth", "width=600,height=700");
+      if (!popup) {
+        throw new Error("Popup blocked — allow popups for this site and try again.");
+      }
 
       // Listen for the callback message
       const handler = (e: MessageEvent) => {
         if (e.data === "linkedin-connected") {
           window.removeEventListener("message", handler);
-          checkLinkedinStatus();
+          void checkLinkedinStatus();
           setLinkedinLoading(false);
         }
       };
@@ -58,33 +77,43 @@ export function Settings() {
         if (popup?.closed) {
           clearInterval(interval);
           window.removeEventListener("message", handler);
-          checkLinkedinStatus();
+          void checkLinkedinStatus();
           setLinkedinLoading(false);
         }
       }, 1000);
-    } catch {
+    } catch (e: unknown) {
+      setLinkedinError(e instanceof Error ? e.message : String(e));
       setLinkedinLoading(false);
     }
   };
 
   const disconnectLinkedin = async () => {
-    await fetch("/api/linkedin/disconnect", { method: "POST" });
+    await apiFetch("/api/linkedin/disconnect", { method: "POST" });
     setLinkedinStatus({ connected: false });
   };
 
   useEffect(() => {
-    fetch("/api/settings").then((r) => r.json()).then(setSettings);
-    checkLinkedinStatus();
+    void (async () => {
+      try {
+        const res = await apiFetch("/api/settings");
+        setSettings(await readApiJson<SettingsData>(res));
+      } catch {
+        /* ignore */
+      }
+    })();
+    void checkLinkedinStatus();
   }, [checkLinkedinStatus]);
 
   const save = () => {
-    fetch("/api/settings", {
+    apiFetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings),
-    }).then(() => {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+    }).then(async (r) => {
+      if (r.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
     });
   };
 
@@ -208,6 +237,14 @@ export function Settings() {
 
       <h3 className="text-lg font-semibold mt-8 mb-4">LinkedIn API</h3>
       <div className="bg-white rounded-lg border border-gray-200 p-6">
+        {linkedinError && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between gap-2">
+            <span>{linkedinError}</span>
+            <button type="button" onClick={() => setLinkedinError(null)} className="text-red-400 hover:text-red-600 shrink-0">
+              ✕
+            </button>
+          </div>
+        )}
         {linkedinStatus.connected ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

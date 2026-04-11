@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStylesStore } from "../stores/styles";
 import { importFile } from "../lib/import-file";
+import { apiFetch } from "../lib/api";
 
 export function StylesList() {
   const { styles, loading, fetch: fetchStyles, create: createStyle, remove: deleteStyle } = useStylesStore();
@@ -22,7 +23,7 @@ export function StylesList() {
     setGeneratingId(id);
     setGenerateError(null);
     try {
-      const res = await fetch(`/api/styles/${id}/generate`, { method: "POST" });
+      const res = await apiFetch(`/api/styles/${id}/generate`, { method: "POST" });
       if (!res.ok) throw new Error((await res.json()).error);
       await fetchStyles();
     } catch (err: unknown) {

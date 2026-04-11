@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { apiFetch } from "../lib/api";
 
 export interface Contenu {
   id: number;
@@ -28,22 +29,22 @@ export const useContenusStore = create<ContenusStore>((set, get) => ({
 
   fetch: async () => {
     set({ loading: true });
-    const res = await fetch("/api/contenus");
+    const res = await apiFetch("/api/contenus");
     const contenus = await res.json();
     set({ contenus, loading: false });
   },
 
   create: async (data) => {
-    await fetch("/api/contenus", {
+    await apiFetch("/api/contenus", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    await get().fetch();
+    await get().apiFetch();
   },
 
   update: async (id, data) => {
-    const res = await fetch(`/api/contenus/${id}`, {
+    const res = await apiFetch(`/api/contenus/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -53,7 +54,7 @@ export const useContenusStore = create<ContenusStore>((set, get) => ({
   },
 
   remove: async (id) => {
-    await fetch(`/api/contenus/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/contenus/${id}`, { method: "DELETE" });
     set({ contenus: get().contenus.filter((c) => c.id !== id) });
   },
 }));

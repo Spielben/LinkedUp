@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { apiFetch } from "../lib/api";
 
 export interface LinkedInPost {
   id: number;
@@ -34,7 +35,7 @@ export const useLinkedInPostsStore = create<LinkedInPostsStore>((set, get) => ({
   fetch: async () => {
     set({ loading: true });
     try {
-      const res = await fetch("/api/linkedin-posts");
+      const res = await apiFetch("/api/linkedin-posts");
       const posts = await res.json();
       set({ posts, loading: false });
     } catch (e) {
@@ -44,7 +45,7 @@ export const useLinkedInPostsStore = create<LinkedInPostsStore>((set, get) => ({
 
   importFile: async (file) => {
     const content = await file.text();
-    const res = await fetch("/api/linkedin-posts/import", {
+    const res = await apiFetch("/api/linkedin-posts/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
@@ -54,12 +55,12 @@ export const useLinkedInPostsStore = create<LinkedInPostsStore>((set, get) => ({
       throw new Error(err.error || "Import failed");
     }
     const result = await res.json();
-    await get().fetch();
+    await get().apiFetch();
     return result;
   },
 
   scrape: async () => {
-    const res = await fetch("/api/linkedin-posts/scrape", {
+    const res = await apiFetch("/api/linkedin-posts/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
@@ -69,12 +70,12 @@ export const useLinkedInPostsStore = create<LinkedInPostsStore>((set, get) => ({
       throw new Error((err as { error?: string }).error || "Scrape failed");
     }
     const result = await res.json();
-    await get().fetch();
+    await get().apiFetch();
     return result;
   },
 
   remove: async (id) => {
-    await fetch(`/api/linkedin-posts/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/linkedin-posts/${id}`, { method: "DELETE" });
     set({ posts: get().posts.filter((p) => p.id !== id) });
   },
 }));

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { apiFetch } from "../lib/api";
 
 export interface Post {
   id: number;
@@ -50,24 +51,24 @@ export const usePostsStore = create<PostsStore>((set, get) => ({
 
   fetch: async () => {
     set({ loading: true });
-    const res = await fetch("/api/posts");
+    const res = await apiFetch("/api/posts");
     const posts = await res.json();
     set({ posts, loading: false });
   },
 
   create: async (data) => {
-    const res = await fetch("/api/posts", {
+    const res = await apiFetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
     const { id } = await res.json();
-    await get().fetch();
+    await get().apiFetch();
     return get().posts.find((p) => p.id === id)!;
   },
 
   update: async (id, data) => {
-    const res = await fetch(`/api/posts/${id}`, {
+    const res = await apiFetch(`/api/posts/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -78,12 +79,12 @@ export const usePostsStore = create<PostsStore>((set, get) => ({
   },
 
   remove: async (id) => {
-    await fetch(`/api/posts/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/posts/${id}`, { method: "DELETE" });
     set({ posts: get().posts.filter((p) => p.id !== id) });
   },
 
   generate: async (id) => {
-    const res = await fetch(`/api/posts/${id}/generate`, { method: "POST" });
+    const res = await apiFetch(`/api/posts/${id}/generate`, { method: "POST" });
     if (!res.ok) throw new Error((await res.json()).error);
     const updated = await res.json();
     set({ posts: get().posts.map((p) => (p.id === id ? updated : p)) });
@@ -91,7 +92,7 @@ export const usePostsStore = create<PostsStore>((set, get) => ({
   },
 
   optimize: async (id) => {
-    const res = await fetch(`/api/posts/${id}/optimize`, { method: "POST" });
+    const res = await apiFetch(`/api/posts/${id}/optimize`, { method: "POST" });
     if (!res.ok) throw new Error((await res.json()).error);
     const updated = await res.json();
     set({ posts: get().posts.map((p) => (p.id === id ? updated : p)) });

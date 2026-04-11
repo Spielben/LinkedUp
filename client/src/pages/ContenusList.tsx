@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useContenusStore } from "../stores/contenus";
 import { importFile } from "../lib/import-file";
+import { apiFetch } from "../lib/api";
 
 export function ContenusList() {
   const { contenus, loading, fetch: fetchContenus, create: createContenu, remove: deleteContenu } = useContenusStore();
@@ -22,7 +23,7 @@ export function ContenusList() {
     setIngestingId(id);
     setIngestError(null);
     try {
-      const res = await fetch(`/api/contenus/${id}/ingest`, { method: "POST" });
+      const res = await apiFetch(`/api/contenus/${id}/ingest`, { method: "POST" });
       if (!res.ok) throw new Error((await res.json()).error);
       await fetchContenus();
     } catch (err: unknown) {

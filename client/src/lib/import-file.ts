@@ -1,3 +1,5 @@
+import { apiUrl } from "./api";
+
 export async function importFile(
   file: File,
   table: "styles" | "templates" | "contenus"
@@ -6,7 +8,7 @@ export async function importFile(
   formData.append("table", table);
   formData.append("file", file);
 
-  const res = await fetch("/api/import/csv", {
+  const res = await fetch(apiUrl("/api/import/csv"), {
     method: "POST",
     body: formData,
   });

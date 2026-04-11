@@ -17,6 +17,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export function createServer(port = 3000) {
   const app = express();
 
+  // Allow Vite dev (e.g. :5173) to call API on :3000 without relying on proxy alone
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (
+      typeof origin === "string" &&
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
+    ) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    }
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   app.use(express.json({ limit: "50mb" }));
 
   // API routes
