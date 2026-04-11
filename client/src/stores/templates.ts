@@ -44,7 +44,7 @@ export const useTemplatesStore = create<TemplatesStore>((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    await get().apiFetch();
+    await get().fetch();
   },
 
   update: async (id, data) => {

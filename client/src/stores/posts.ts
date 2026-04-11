@@ -63,7 +63,7 @@ export const usePostsStore = create<PostsStore>((set, get) => ({
       body: JSON.stringify(data),
     });
     const { id } = await res.json();
-    await get().apiFetch();
+    await get().fetch();
     return get().posts.find((p) => p.id === id)!;
   },
 

@@ -55,7 +55,7 @@ export const useLinkedInPostsStore = create<LinkedInPostsStore>((set, get) => ({
       throw new Error(err.error || "Import failed");
     }
     const result = await res.json();
-    await get().apiFetch();
+    await get().fetch();
     return result;
   },
 
@@ -70,7 +70,7 @@ export const useLinkedInPostsStore = create<LinkedInPostsStore>((set, get) => ({
       throw new Error((err as { error?: string }).error || "Scrape failed");
     }
     const result = await res.json();
-    await get().apiFetch();
+    await get().fetch();
     return result;
   },
 

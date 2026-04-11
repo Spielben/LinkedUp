@@ -1,14 +1,36 @@
+const API_ORIGINS = new Set(["http://localhost:3000", "http://127.0.0.1:3000"]);
+
 /**
- * In Vite dev the UI runs on :5173 (or similar) while Express serves the API on :3000.
- * Relative `/api` requests can fall through to index.html (invalid JSON). In dev we call the API origin explicitly.
- * Set VITE_API_ORIGIN in `.env` if your backend uses another host/port.
+ * Use absolute URL to the Express API when the UI is not served from the same origin
+ * (Vite dev :5173, vite preview, etc.). Production build opened on :3000 uses relative /api.
+ * Override with VITE_API_ORIGIN in client/.env when needed.
  */
 export function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
+  const configured = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.replace(/\/$/, "");
+
+  if (configured) {
+    return `${configured}${p}`;
+  }
+
+  if (typeof window !== "undefined") {
+    const origin = window.location.origin;
+    if (API_ORIGINS.has(origin)) {
+      return p;
+    }
+    const h = window.location.hostname;
+    const port = window.location.port;
+    const isLoopback =
+      h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+    // Vite dev/preview (:5173, :4173, …): API stays on :3000
+    if (isLoopback && port !== "3000") {
+      return `http://127.0.0.1:3000${p}`;
+    }
+    return p;
+  }
+
   if (import.meta.env.DEV) {
-    const raw = import.meta.env.VITE_API_ORIGIN as string | undefined;
-    const base = (raw?.replace(/\/$/, "") || "http://127.0.0.1:3000");
-    return `${base}${p}`;
+    return `http://127.0.0.1:3000${p}`;
   }
   return p;
 }
@@ -39,7 +61,7 @@ export async function readApiJson<T>(res: Response): Promise<T> {
   const trimmed = text.trim();
   if (trimmed.startsWith("<!") || trimmed.startsWith("<html")) {
     throw new Error(
-      "The app received a web page instead of API data. Start the backend (npm run dev, port 3000) or check VITE_API_ORIGIN."
+      "The app received a web page instead of API JSON. Run the backend on port 3000 (npm run dev from linkdup). If the UI is not on :3000, ensure the API is reachable; set VITE_API_ORIGIN in client/.env if it uses another URL."
     );
   }
   try {

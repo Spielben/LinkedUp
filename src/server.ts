@@ -48,6 +48,15 @@ export function createServer(port = 3000) {
   app.use("/api/linkedin-posts", linkedinPostsRouter);
   app.use("/api/linkedin", linkedinAuthRouter);
 
+  // Unmatched /api/* → JSON 404 (never return SPA index.html for API paths)
+  app.use((req, res, next) => {
+    const pathOnly = req.path || "";
+    if (pathOnly === "/api" || pathOnly.startsWith("/api/")) {
+      return res.status(404).type("application/json").json({ error: "Not found", path: pathOnly });
+    }
+    next();
+  });
+
   // Serve downloaded images from data/images/
   const imagesDir = path.join(process.cwd(), "data", "images");
   console.log("  Serving images from:", imagesDir);
