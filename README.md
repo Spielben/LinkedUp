@@ -48,6 +48,13 @@ npm run build
 npm test   # passes even when no test files exist yet
 ```
 
+## Contributing & releases
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — local setup, issues, pull requests.
+- **[CHANGELOG.md](CHANGELOG.md)** — version history.
+- **[RELEASING.md](RELEASING.md)** — tag + publish a **GitHub Release**.
+- **Releases:** https://github.com/Spielben/LinkedUp/releases
+
 ## Open source checklist
 
 1. Create an empty **public** repository on GitHub (no README/license there if you already have them locally).
@@ -66,3 +73,12 @@ Or push your feature branch first, then open a Pull Request into `main`.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Repository note
+
+This README may still say `linkdup` in paths on your machine — the public repo is **[Spielben/LinkedUp](https://github.com/Spielben/LinkedUp)**. Clone with:
+
+```bash
+git clone https://github.com/Spielben/LinkedUp.git
+cd LinkedUp
+```
