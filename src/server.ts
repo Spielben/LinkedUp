@@ -107,8 +107,8 @@ export function createServer(port = 3000) {
     if (isDev) {
       console.log(`\n  🔗 LINK'DUP API + OAuth: http://localhost:${port}`);
       console.log(`  📱 Open the UI (Vite + responsive CSS): ${viteDevOrigin}`);
-      console.log(`     Run in another terminal: npm run dev:client`);
-      console.log(`     Or once: npm run dev:all\n`);
+      console.log(`     Start API + UI together: npm run dev`);
+      console.log(`     (UI only: npm run dev:client)\n`);
     } else {
       console.log(`\n  🔗 LINK'DUP running at http://localhost:${port}\n`);
     }

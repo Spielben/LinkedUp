@@ -18,11 +18,13 @@ Thanks for helping. This document explains how to work on the project without su
 git clone https://github.com/Spielben/LinkedUp.git
 cd LinkedUp
 npm install
-npm run dev:all
+npm run dev
 ```
 
 - UI: http://localhost:5173  
 - API: http://localhost:3000  
+
+(`npm run dev:onboard` for first-time wizard without Vite; `dev:api` / `dev:client` for split-terminal debugging.)
 
 See [README.md](README.md) for credentials (Keychain / onboarding).
 

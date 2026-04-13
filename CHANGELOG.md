@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `dev:onboard` script: interactive onboarding + API only (previous default `dev` behavior).
+
 ### Changed
+- `npm run dev` now starts API + Vite in one terminal (same as `dev:all`); `dev:all` kept as an alias.
 ### Fixed
 ### Removed
 
