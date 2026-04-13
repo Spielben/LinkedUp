@@ -23,8 +23,16 @@ settingsRouter.put("/", (req, res) => {
     preferred_post_time,
   } = req.body;
 
+  const existingRow = db.prepare("SELECT * FROM settings WHERE id = 1").get() as
+    | { language?: string }
+    | undefined;
+
   const normalizedLanguage =
-    typeof language === "string" && ALLOWED_LANGUAGES.has(language) ? language : "fr";
+    typeof language === "string" && ALLOWED_LANGUAGES.has(language)
+      ? language
+      : existingRow?.language && ALLOWED_LANGUAGES.has(existingRow.language)
+        ? existingRow.language
+        : "en";
 
   const normalizedDays =
     typeof preferred_post_days === "string"
@@ -40,7 +48,7 @@ settingsRouter.put("/", (req, res) => {
       ? preferred_post_time
       : null;
 
-  const existing = db.prepare("SELECT * FROM settings WHERE id = 1").get();
+  const existing = existingRow;
 
   if (existing) {
     db.prepare(`

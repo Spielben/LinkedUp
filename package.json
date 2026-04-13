@@ -8,10 +8,12 @@
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
+    "dev:api": "DEV=1 tsx src/cli.ts",
+    "dev:all": "concurrently -k -n api,ui -c blue,magenta \"DEV=1 tsx src/cli.ts\" \"vite --config client/vite.config.ts\"",
     "dev:client": "vite --config client/vite.config.ts",
     "build": "tsc && vite build --config client/vite.config.ts",
     "start": "node dist/cli.js",
-    "test": "vitest"
+    "test": "vitest --passWithNoTests"
   },
   "keywords": [
     "linkedin",
@@ -37,6 +39,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.2",

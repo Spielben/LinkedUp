@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Ensure Tailwind scans all client sources (v4) — avoids missing responsive utilities */
+@source "./**/*.{html,js,ts,jsx,tsx}";
 
 body {
   margin: 0;
