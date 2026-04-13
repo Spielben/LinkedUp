@@ -84,35 +84,31 @@ export function ContenusList() {
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Contenus ({contenus.length})</h2>
-        <div className="flex gap-2 items-center">
-          <div className="flex border border-gray-300 rounded-lg overflow-hidden mr-2">
+    <div className="w-full min-w-0 max-w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold shrink-0">Contenus ({contenus.length})</h2>
+        <div className="flex flex-wrap gap-2 items-center sm:ml-auto">
+          <div className="flex border border-gray-300 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode("list")}
-              className={`px-2 py-1.5 text-xs ${viewMode === "list" ? "bg-gray-200 font-medium" : "hover:bg-gray-50"}`}
+              className={`px-2.5 py-1.5 text-xs ${viewMode === "list" ? "bg-gray-200 font-medium" : "hover:bg-gray-50"}`}
               title="List view"
-            >
-              ☰
-            </button>
+            >☰</button>
             <button
               onClick={() => setViewMode("grid")}
-              className={`px-2 py-1.5 text-xs ${viewMode === "grid" ? "bg-gray-200 font-medium" : "hover:bg-gray-50"}`}
+              className={`px-2.5 py-1.5 text-xs ${viewMode === "grid" ? "bg-gray-200 font-medium" : "hover:bg-gray-50"}`}
               title="Grid view"
-            >
-              ▦
-            </button>
+            >▦</button>
           </div>
           <button
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-50"
+            className="bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap"
             disabled={importing}
             onClick={() => fileInputRef.current?.click()}
           >
-            {importing ? "Importing..." : "Import CSV"}
+            {importing ? "Importing…" : "Import CSV"}
           </button>
           <button
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700 whitespace-nowrap"
             onClick={() => setShowForm(!showForm)}
           >
             + New Content
@@ -139,7 +135,7 @@ export function ContenusList() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })}>
@@ -182,67 +178,84 @@ export function ContenusList() {
       ) : (
         <>
           {ingestError && (
-            <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between">
-              <span>{ingestError}</span>
-              <button onClick={() => setIngestError(null)} className="ml-3 text-red-400 hover:text-red-600">✕</button>
+            <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start">
+              <span className="min-w-0 break-words">{ingestError}</span>
+              <button type="button" onClick={() => setIngestError(null)} className="shrink-0 self-end sm:self-start text-red-400 hover:text-red-600">✕</button>
             </div>
           )}
-          <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "grid gap-3"}>
+          <div className={viewMode === "grid"
+            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"
+            : "grid gap-2 md:gap-3 w-full min-w-0"
+          }>
             {contenus.map((c) => (
-              <div key={c.id} className="bg-white rounded-lg border border-gray-200 p-4">
-                <div
-                  className="flex justify-between items-start cursor-pointer"
-                  onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm hover:text-blue-600">{c.name}</h3>
-                    {c.url && (
-                      <a href={c.url} target="_blank" onClick={(e) => e.stopPropagation()} className="text-xs text-blue-600 mt-1 block truncate">
-                        {c.url}
-                      </a>
-                    )}
-                    {c.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{c.description}</p>}
-                    {c.summary && (
-                      <p className={`text-xs text-gray-600 mt-2 ${expandedId === c.id ? "" : "line-clamp-2"} italic`}>
-                        {c.summary}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-2 ml-4 shrink-0">
-                    <div className="flex items-center gap-2">
-                      {c.type && (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[c.type] || "bg-gray-100 text-gray-800"}`}>
-                          {c.type}
-                        </span>
-                      )}
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        c.status === "generated" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                      }`}>
-                        {c.status}
+              <div
+                key={c.id}
+                className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 cursor-pointer hover:border-blue-200 transition w-full min-w-0 max-w-full overflow-hidden box-border"
+                onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
+              >
+                {/* Content body */}
+                <div className="min-w-0 max-w-full">
+                  <h3 className="font-medium text-sm leading-snug hover:text-blue-600 break-words [overflow-wrap:anywhere] line-clamp-4 sm:line-clamp-2">
+                    {c.name}
+                  </h3>
+                  {c.url && (
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-blue-600 mt-1 block break-all [overflow-wrap:anywhere]"
+                    >
+                      {c.url}
+                    </a>
+                  )}
+                  {c.description && (
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-3 break-words">{c.description}</p>
+                  )}
+                  {c.summary && (
+                    <p className={`text-xs text-gray-600 mt-1 italic break-words ${expandedId === c.id ? "" : "line-clamp-3 sm:line-clamp-2"}`}>
+                      {c.summary}
+                    </p>
+                  )}
+                </div>
+
+                {/* Footer: badges then actions — stacked on narrow screens */}
+                <div className="mt-2 pt-2 border-t border-gray-100 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap gap-2 min-w-0">
+                    {c.type && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${typeColors[c.type] || "bg-gray-100 text-gray-800"}`}>
+                        {c.type}
                       </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {c.url && !c.summary && (
-                        <button
-                          className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={ingestingId === c.id}
-                          onClick={(e) => { e.stopPropagation(); handleIngest(c.id); }}
-                        >
-                          {ingestingId === c.id ? "Ingesting..." : "Ingest"}
-                        </button>
-                      )}
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                      c.status === "generated" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                    }`}>
+                      {c.status}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end sm:justify-end shrink-0">
+                    {c.url && !c.summary && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
-                        className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                        type="button"
+                        className="px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 min-h-[2rem] sm:min-h-0"
+                        disabled={ingestingId === c.id}
+                        onClick={(e) => { e.stopPropagation(); void handleIngest(c.id); }}
                       >
-                        Delete
+                        {ingestingId === c.id ? "Ingesting…" : "Ingest"}
                       </button>
-                    </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); void handleDelete(c.id); }}
+                      className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg min-h-[2rem] sm:min-h-0"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
 
                 {expandedId === c.id && (
-                  <div className="mt-4 pt-4 border-t space-y-2">
+                  <div className="mt-3 pt-3 border-t space-y-2">
                     {c.content_raw && (
                       <div>
                         <p className="text-xs font-medium text-gray-600 mb-1">Raw content:</p>

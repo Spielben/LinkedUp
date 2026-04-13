@@ -18,8 +18,8 @@ interface LinkedInStatus {
 }
 
 const SUPPORTED_LANGUAGES = [
-  { code: "fr", label: "Français" },
   { code: "en", label: "English" },
+  { code: "fr", label: "Français" },
   { code: "es", label: "Español" },
   { code: "de", label: "Deutsch" },
   { code: "pt", label: "Português" },
@@ -188,7 +188,7 @@ export function Settings() {
           <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
           <select
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            value={settings.language || "fr"}
+            value={settings.language || "en"}
             onChange={(e) => setSettings({ ...settings, language: e.target.value })}
           >
             {SUPPORTED_LANGUAGES.map((lang) => (

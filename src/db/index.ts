@@ -31,9 +31,16 @@ export function getDb(): Database.Database {
 function runMigrations(database: Database.Database): void {
   // Migration: Add language column to settings
   try {
-    database.exec("ALTER TABLE settings ADD COLUMN language TEXT DEFAULT 'fr'");
+    database.exec("ALTER TABLE settings ADD COLUMN language TEXT DEFAULT 'en'");
   } catch (e) {
     // Column already exists, ignore
+  }
+  try {
+    database.exec(
+      "UPDATE settings SET language = 'en' WHERE id = 1 AND (language IS NULL OR TRIM(language) = '')"
+    );
+  } catch (e) {
+    /* ignore */
   }
 
   // Migration: Add preferred_post_days column to settings
@@ -82,6 +89,7 @@ function runMigrations(database: Database.Database): void {
     "image_url TEXT",
     "first_comment TEXT",
     "status TEXT DEFAULT 'published'",
+    "is_repost INTEGER DEFAULT 0",
   ]) {
     try {
       database.exec(`ALTER TABLE linkedin_posts ADD COLUMN ${col}`);

@@ -80,18 +80,38 @@ export function createServer(port = 3000) {
     });
   });
 
-  // Serve built client in production
   const clientDist = path.join(__dirname, "../dist/client");
-  app.use(express.static(clientDist));
-  app.get("/{*splat}", (_req, res) => {
-    res.sendFile(path.join(clientDist, "index.html"));
-  });
+  const isDev = Boolean(process.env.DEV);
+  /** Vite dev server (UI with Tailwind HMR). Never serve stale dist/client in DEV. */
+  const viteDevOrigin = (process.env.VITE_DEV_ORIGIN || "http://127.0.0.1:5173").replace(/\/$/, "");
+
+  if (isDev) {
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      const p = req.path || "";
+      if (p.startsWith("/api") || p.startsWith("/data/")) return next();
+      const loc = `${viteDevOrigin}${req.originalUrl || "/"}`;
+      return res.redirect(302, loc);
+    });
+  } else {
+    app.use(express.static(clientDist));
+    app.get("/{*splat}", (_req, res) => {
+      res.sendFile(path.join(clientDist, "index.html"));
+    });
+  }
 
   // Initialize database
   getDb();
 
   const server = app.listen(port, () => {
-    console.log(`\n  🔗 LINK'DUP running at http://localhost:${port}\n`);
+    if (isDev) {
+      console.log(`\n  🔗 LINK'DUP API + OAuth: http://localhost:${port}`);
+      console.log(`  📱 Open the UI (Vite + responsive CSS): ${viteDevOrigin}`);
+      console.log(`     Run in another terminal: npm run dev:client`);
+      console.log(`     Or once: npm run dev:all\n`);
+    } else {
+      console.log(`\n  🔗 LINK'DUP running at http://localhost:${port}\n`);
+    }
   });
 
   process.on("SIGINT", () => {

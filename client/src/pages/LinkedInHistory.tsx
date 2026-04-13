@@ -39,7 +39,12 @@ export function LinkedInHistory() {
     setError(null);
     try {
       const result = await scrape();
-      setMessage(`Scraped ${result.imported} new posts (${result.profilesScanned} profile runs)`);
+      const dup = result.skippedDuplicates ?? 0;
+      const noTxt = result.skippedNoText ?? 0;
+      const err = result.skippedErrors ?? 0;
+      setMessage(
+        `Scrape: ${result.imported} new · ${dup} already in DB · ${noTxt} no text · ${err} errors · ${result.postsProcessed ?? 0} items processed`
+      );
       setTimeout(() => setMessage(null), 6000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Scrape failed");
@@ -60,6 +65,18 @@ export function LinkedInHistory() {
       status === "draft"     ? "bg-yellow-100 text-yellow-800" :
                                "bg-gray-100 text-gray-800"
     }`;
+
+  const isRepost = (p: { is_repost?: number | boolean }) =>
+    p.is_repost === true || p.is_repost === 1 || Number(p.is_repost) === 1;
+
+  /** Text shown in card preview (scraped posts often have no subject). */
+  const postPreviewText = (p: { text?: string | null; description?: string | null; subject?: string | null }) => {
+    const t = (p.text || "").trim();
+    if (t) return t;
+    const d = (p.description || "").trim();
+    if (d) return d;
+    return (p.subject || "").trim();
+  };
 
   const filtered = (filterStatus === "all" ? posts : posts.filter((p) => p.status === filterStatus))
     .slice()
@@ -129,28 +146,16 @@ export function LinkedInHistory() {
           </button>
         ))}
 
-        {/* Sort — pushed to the right on wide screens, wraps naturally on mobile */}
-        <div className="flex items-center gap-1 sm:ml-auto">
-          <span className="text-xs text-gray-500 hidden xs:inline">Date:</span>
-          <button
-            onClick={() => setSortDir("desc")}
-            className={`px-2.5 py-1 rounded text-xs font-medium transition ${
-              sortDir === "desc" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-            title="Newest first"
-          >
-            ↓ Newest
-          </button>
-          <button
-            onClick={() => setSortDir("asc")}
-            className={`px-2.5 py-1 rounded text-xs font-medium transition ${
-              sortDir === "asc" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-            title="Oldest first"
-          >
-            ↑ Oldest
-          </button>
-        </div>
+        {/* Sort toggle — single button, switches asc/desc on click */}
+        <button
+          onClick={() => setSortDir(sortDir === "desc" ? "asc" : "desc")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition sm:ml-auto"
+          title={sortDir === "desc" ? "Plus récent en premier — cliquer pour inverser" : "Plus ancien en premier — cliquer pour inverser"}
+        >
+          <span>Date</span>
+          <span className="text-sm leading-none">{sortDir === "desc" ? "↓" : "↑"}</span>
+          <span className="text-gray-500">{sortDir === "desc" ? "Récent" : "Ancien"}</span>
+        </button>
       </div>
 
       {/* ── Alerts ── */}
@@ -165,6 +170,16 @@ export function LinkedInHistory() {
           {message}
         </div>
       )}
+
+      <details className="mb-4 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <summary className="cursor-pointer font-medium text-gray-700">How LinkedIn scrape works</summary>
+        <ul className="mt-2 list-disc list-inside space-y-1 pl-1">
+          <li>Posts are fetched from Apify (your profile URL in Settings).</li>
+          <li>Each post is saved with <code className="bg-gray-200 px-1 rounded">INSERT OR IGNORE</code> on <code className="bg-gray-200 px-1 rounded">linkedin_url</code> — same URL as in the DB is skipped (counted as &quot;already in DB&quot;).</li>
+          <li>Items with no extractable caption are skipped (&quot;no text&quot;).</li>
+          <li>Re-running scrape only adds <strong>new</strong> URLs; it does not refresh metrics on existing rows.</li>
+        </ul>
+      </details>
 
       {/* ── Content ── */}
       {loading ? (
@@ -189,21 +204,28 @@ export function LinkedInHistory() {
                   onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
               )}
-              <div className="p-3 sm:p-4">
+              <div className="p-3 sm:p-4 min-h-[7rem]">
                 {post.subject && (
-                  <h3 className="font-medium text-sm line-clamp-2 mb-2">{post.subject}</h3>
+                  <h3 className="font-medium text-sm line-clamp-2 mb-1.5">{post.subject}</h3>
                 )}
-                {post.text ? (
-                  <p className="text-xs text-gray-600 line-clamp-3">{post.text}</p>
-                ) : post.description ? (
-                  <p className="text-xs text-gray-500 line-clamp-3 italic">{post.description}</p>
-                ) : null}
-                <div className="flex items-center justify-between mt-3 gap-2">
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-400 min-w-0">
+                {postPreviewText(post) ? (
+                  <p className="text-sm text-gray-700 leading-relaxed line-clamp-8 whitespace-pre-line break-words">
+                    {postPreviewText(post)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No preview text</p>
+                )}
+                <div className="flex items-center justify-between mt-3 gap-2 flex-wrap">
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-400 min-w-0 items-center">
+                    {isRepost(post) && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-900 shrink-0">
+                        Repost
+                      </span>
+                    )}
                     {post.likes > 0 && <span>{post.likes} likes</span>}
                     {post.comments > 0 && <span>{post.comments} comments</span>}
                     {post.published_date && (
-                      <span className="truncate">{post.published_date}</span>
+                      <span className="break-all">{post.published_date}</span>
                     )}
                   </div>
                   <span className={statusBadge(post.status)}>{post.status}</span>
@@ -256,48 +278,53 @@ export function LinkedInHistory() {
               className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 cursor-pointer hover:border-blue-200 transition"
               onClick={() => setExpandedId(expandedId === post.id ? null : post.id)}
             >
+              {/* Main row: optional thumbnail + content */}
               <div className="flex gap-3 items-start">
                 {post.image_url && (
                   <img
                     src={post.image_url}
                     alt=""
-                    className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded shrink-0"
+                    className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded shrink-0"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      {post.subject && (
-                        <h3 className="font-medium text-sm truncate">{post.subject}</h3>
-                      )}
-                      {post.text ? (
-                        <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">{post.text}</p>
-                      ) : post.description ? (
-                        <p className="text-xs text-gray-500 line-clamp-2 mt-0.5 italic">{post.description}</p>
-                      ) : null}
-                      {post.published_date && (
-                        <p className="text-xs text-gray-400 mt-1">{post.published_date}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 shrink-0">
-                      <span className={statusBadge(post.status)}>{post.status}</span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); void handleDelete(post.id); }}
-                        className="px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                  {/* Engagement row — hidden on very small screens */}
-                  {(post.likes > 0 || post.comments > 0) && (
-                    <div className="hidden sm:flex gap-3 mt-1.5 text-xs text-gray-400">
-                      {post.likes > 0 && <span>{post.likes} likes</span>}
-                      {post.comments > 0 && <span>{post.comments} comments</span>}
-                    </div>
+                  {post.subject && (
+                    <h3 className="font-medium text-sm leading-snug line-clamp-2 pr-1">{post.subject}</h3>
+                  )}
+                  {postPreviewText(post) ? (
+                    <p className="text-sm text-gray-700 leading-relaxed line-clamp-6 mt-1 whitespace-pre-line break-words">
+                      {postPreviewText(post)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic mt-1">No preview text</p>
                   )}
                 </div>
+              </div>
+
+              {/* Footer row: date + engagement + status + delete */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 pt-2 border-t border-gray-100">
+                {isRepost(post) && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-900 shrink-0">
+                    Repost
+                  </span>
+                )}
+                {post.published_date && (
+                  <span className="text-xs text-gray-400 break-all">{post.published_date}</span>
+                )}
+                {post.likes > 0 && (
+                  <span className="text-xs text-gray-400">{post.likes} likes</span>
+                )}
+                {post.comments > 0 && (
+                  <span className="text-xs text-gray-400">{post.comments} comments</span>
+                )}
+                <span className={`${statusBadge(post.status)} ml-auto`}>{post.status}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); void handleDelete(post.id); }}
+                  className="px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 rounded-lg"
+                >
+                  Delete
+                </button>
               </div>
 
               {expandedId === post.id && (

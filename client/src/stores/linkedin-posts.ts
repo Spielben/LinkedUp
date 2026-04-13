@@ -17,6 +17,8 @@ export interface LinkedInPost {
   impressions: number;
   source: string;
   created_at: string;
+  /** 1 = repost/reshare (Apify scrape or CSV) */
+  is_repost?: number | boolean;
 }
 
 interface LinkedInPostsStore {
@@ -24,7 +26,14 @@ interface LinkedInPostsStore {
   loading: boolean;
   fetch: () => Promise<void>;
   importFile: (file: File) => Promise<{ imported: number; skipped: number; duplicates: number }>;
-  scrape: () => Promise<{ imported: number; profilesScanned: number }>;
+  scrape: () => Promise<{
+    imported: number;
+    profilesScanned: number;
+    skippedDuplicates?: number;
+    skippedNoText?: number;
+    skippedErrors?: number;
+    postsProcessed?: number;
+  }>;
   remove: (id: number) => Promise<void>;
 }
 

@@ -8,9 +8,10 @@ const LINKEDIN_API_BASE = "https://api.linkedin.com";
 
 export const LINKEDIN_REDIRECT_URI = "http://localhost:3000/api/linkedin/callback";
 const REDIRECT_URI = LINKEDIN_REDIRECT_URI;
-// Only request w_member_social — "Sign In with LinkedIn using OpenID Connect"
-// product is not required. openid/profile scopes are fetched via fallback logic.
-const SCOPES = "w_member_social";
+// Requires two LinkedIn products on your app:
+//   • "Share on LinkedIn"                       → w_member_social (post creation)
+//   • "Sign In with LinkedIn using OpenID Connect" → openid, profile (person ID + name)
+const SCOPES = "openid profile w_member_social";
 
 /** Only http(s) localhost / 127.0.0.1 — used for postMessage targetOrigin after OAuth */
 export function isAllowedOAuthReturnOrigin(origin: string): boolean {
@@ -206,66 +207,80 @@ function extractSubFromJwt(token: string): string | null {
  */
 async function fetchPersonUrn(accessToken: string): Promise<string> {
   const headers = { Authorization: `Bearer ${accessToken}` };
+  const tokenPreview = accessToken.slice(0, 12) + "…";
 
-  // Method 1: decode JWT payload — works if LinkedIn issued a JWT access token
+  console.log("[linkedin] fetchPersonUrn — token prefix:", tokenPreview);
+
+  // Method 1: decode JWT payload
   const jwtSub = extractSubFromJwt(accessToken);
-  if (jwtSub) return jwtSub;
+  if (jwtSub) {
+    console.log("[linkedin] person ID via JWT decode:", jwtSub);
+    return jwtSub;
+  }
+  console.log("[linkedin] method1 (JWT decode): token is not a JWT, trying introspection…");
 
-  // Method 2: token introspection — works with w_member_social only, needs client creds
+  // Method 2: token introspection
   try {
     const clientId = await getCredential("linkedin_client_id");
     const clientSecret = await getCredential("linkedin_client_secret");
+    console.log("[linkedin] method2 (introspection): clientId found=", !!clientId, "secret found=", !!clientSecret);
     if (clientId && clientSecret) {
-      const res = await fetch(
-        "https://www.linkedin.com/oauth/v2/introspectToken",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            token: accessToken,
-            client_id: clientId,
-            client_secret: clientSecret,
-          }),
-        }
-      );
+      const res = await fetch("https://www.linkedin.com/oauth/v2/introspectToken", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token: accessToken,
+          client_id: clientId,
+          client_secret: clientSecret,
+        }),
+      });
+      const body = await res.text();
+      console.log("[linkedin] method2 introspection response:", res.status, body.slice(0, 200));
       if (res.ok) {
-        const data = (await res.json()) as {
-          active?: boolean;
-          authorized_user?: string;
-        };
+        const data = JSON.parse(body) as { active?: boolean; authorized_user?: string };
         if (data.active && data.authorized_user) {
-          // authorized_user = "urn:li:member:12345678" — extract the numeric ID
-          const match = data.authorized_user.match(
-            /urn:li:(?:member|person):(\w+)/
-          );
-          if (match) return match[1];
+          const match = data.authorized_user.match(/urn:li:(?:member|person):(\w+)/);
+          if (match) {
+            console.log("[linkedin] person ID via introspection:", match[1]);
+            return match[1];
+          }
         }
       }
     }
-  } catch {
-    // continue
+  } catch (e) {
+    console.error("[linkedin] method2 introspection error:", e);
   }
 
-  // Method 3: OpenID Connect userinfo (requires openid scope)
+  // Method 3: OpenID Connect userinfo
   try {
     const res = await fetch(`${LINKEDIN_API_BASE}/v2/userinfo`, { headers });
+    const body = await res.text();
+    console.log("[linkedin] method3 /v2/userinfo:", res.status, body.slice(0, 200));
     if (res.ok) {
-      const data = (await res.json()) as { sub?: string };
-      if (data.sub) return data.sub;
+      const data = JSON.parse(body) as { sub?: string };
+      if (data.sub) {
+        console.log("[linkedin] person ID via /v2/userinfo:", data.sub);
+        return data.sub;
+      }
     }
-  } catch {
-    // continue
+  } catch (e) {
+    console.error("[linkedin] method3 error:", e);
   }
 
-  // Method 4: legacy /v2/me (requires profile or r_liteprofile scope)
+  // Method 4: legacy /v2/me
   try {
     const res = await fetch(`${LINKEDIN_API_BASE}/v2/me`, { headers });
+    const body = await res.text();
+    console.log("[linkedin] method4 /v2/me:", res.status, body.slice(0, 200));
     if (res.ok) {
-      const data = (await res.json()) as { id?: string };
-      if (data.id) return data.id;
+      const data = JSON.parse(body) as { id?: string };
+      if (data.id) {
+        console.log("[linkedin] person ID via /v2/me:", data.id);
+        return data.id;
+      }
     }
-  } catch {
-    // continue
+  } catch (e) {
+    console.error("[linkedin] method4 error:", e);
   }
 
   throw new Error(
