@@ -1,9 +1,33 @@
 import { Router } from "express";
+import multer from "multer";
+import fs from "node:fs";
+import path from "node:path";
 import { getDb } from "../db/index.js";
 import { callOpenRouter, estimateCost } from "../services/openrouter.js";
-import { publishTextPost, publishImagePost, publishComment } from "../services/linkedin.js";
+import { publishTextPost, publishPostWithImageBuffers, publishComment } from "../services/linkedin.js";
+import { getPostMediaSources, resolveAllMediaSources } from "../services/post-media.js";
 
 export const postsRouter = Router();
+
+const postMediaUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const dir = path.join(process.cwd(), "data", "media", "posts", String(req.params.id));
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || "";
+      const safe = /^\.(jpe?g|png|gif|webp)$/i.test(ext) ? ext.toLowerCase() : ".bin";
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${safe}`);
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(file.mimetype);
+    cb(null, ok);
+  },
+});
 
 postsRouter.get("/", (_req, res) => {
   const db = getDb();
@@ -59,6 +83,19 @@ postsRouter.put("/:id", (req, res) => {
 
   for (const [key, value] of Object.entries(fields)) {
     if (key === "id") continue;
+    if (key === "media_json") {
+      if (value === null || value === "") {
+        setClauses.push("media_json = ?");
+        values.push(null);
+      } else if (Array.isArray(value)) {
+        setClauses.push("media_json = ?");
+        values.push(JSON.stringify(value));
+      } else {
+        setClauses.push("media_json = ?");
+        values.push(value);
+      }
+      continue;
+    }
     setClauses.push(`${key} = ?`);
     values.push(value);
   }
@@ -83,6 +120,31 @@ postsRouter.delete("/:id", (req, res) => {
   const db = getDb();
   db.prepare("DELETE FROM posts WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
+});
+
+// ── Upload image file → data/media/posts/:id/ (for LinkedIn publish) ───────
+postsRouter.post("/:id/upload-media", (req, res, next) => {
+  postMediaUpload.single("file")(req, res, (err: unknown) => {
+    if (err) {
+      const msg =
+        err instanceof multer.MulterError
+          ? err.code === "LIMIT_FILE_SIZE"
+            ? "File too large (max 15 MB)"
+            : err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      return res.status(400).json({ error: msg });
+    }
+    next();
+  });
+}, (req, res) => {
+  const db = getDb();
+  const exists = db.prepare("SELECT id FROM posts WHERE id = ?").get(req.params.id);
+  if (!exists) return res.status(404).json({ error: "Post not found" });
+  if (!req.file) return res.status(400).json({ error: "No file (field name: file)" });
+  const rel = path.relative(process.cwd(), req.file.path);
+  res.json({ path: rel.split(path.sep).join("/") });
 });
 
 // ── AI: Generate V1 / V2 / V3 ─────────────────────────────────────────────
@@ -300,12 +362,15 @@ postsRouter.post("/:id/publish", async (req, res) => {
   }
 
   try {
-    // Publish text or text+image
     let result: { postId: string; postUrl: string };
-    const imagePath = post.image_path as string | null;
+    const sources = getPostMediaSources({
+      media_json: post.media_json as string | null,
+      image_path: post.image_path as string | null,
+    });
 
-    if (imagePath) {
-      result = await publishImagePost(text, imagePath);
+    if (sources.length > 0) {
+      const buffers = await resolveAllMediaSources(sources, process.cwd());
+      result = await publishPostWithImageBuffers(text, buffers);
     } else {
       result = await publishTextPost(text);
     }

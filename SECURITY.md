@@ -15,6 +15,10 @@ If you find a security vulnerability, please **do not** open a public issue. Con
 - Anyone who clones the repo runs the app **on their own** hardware. Source code alone does not grant access to another person’s machine.
 - If you deploy the API on a server, treat it like any backend: firewall, HTTPS, secrets management, and do not rely on “security through obscurity.”
 
+## LinkedIn post images (URLs)
+
+Publishing can **download** image URLs you configure on a post (for Cloudinary-style hosting). Only **`https:`** is allowed, and **private / local hostnames** are blocked to limit SSRF. Relative file paths must stay under the project **`data/`** directory. Uploaded images are stored under `data/media/posts/<id>/` and exposed read-only via `/data/media/…` like other static assets under `data/`.
+
 ## Before you `git push`
 
 - Run `git status` and review every staged file.

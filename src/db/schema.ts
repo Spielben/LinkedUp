@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS posts (
   optimization_instructions TEXT,
   publication_date TEXT,
   image_path TEXT,
+  media_json TEXT,
   first_comment TEXT,
   first_comment_posted INTEGER DEFAULT 0,
   linkedin_post_url TEXT,

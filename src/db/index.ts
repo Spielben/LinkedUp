@@ -104,6 +104,13 @@ function runMigrations(database: Database.Database): void {
   } catch (e) {
     // Index already exists
   }
+
+  // Migration: posts.media_json — ordered list of { kind, ref } for LinkedIn images / carousel
+  try {
+    database.exec("ALTER TABLE posts ADD COLUMN media_json TEXT");
+  } catch (e) {
+    // Column already exists
+  }
 }
 
 export function closeDb(): void {

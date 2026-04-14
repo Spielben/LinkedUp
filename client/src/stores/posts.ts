@@ -15,6 +15,7 @@ export interface Post {
   optimization_instructions: string | null;
   publication_date: string | null;
   image_path: string | null;
+  media_json: string | null;
   first_comment: string | null;
   first_comment_posted: number;
   linkedin_post_url: string | null;

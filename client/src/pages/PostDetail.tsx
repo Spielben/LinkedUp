@@ -5,7 +5,13 @@ import { useStylesStore } from "../stores/styles";
 import { useTemplatesStore } from "../stores/templates";
 import { useContenusStore } from "../stores/contenus";
 import { countLinkedInChars } from "../lib/linkedin-chars";
-import { apiFetch, readApiJson } from "../lib/api";
+import { apiFetch, apiUrl, readApiJson } from "../lib/api";
+import {
+  MAX_LINKEDIN_IMAGES,
+  type MediaRow,
+  mediaRowsFromPost,
+  persistMediaPayload,
+} from "../lib/post-media";
 
 const STATUS_OPTIONS = ["Idée", "Brouillon", "Programmé", "Publié"];
 const VERSION_OPTIONS = ["V1", "V2", "V3"];
@@ -52,6 +58,8 @@ export function PostDetail() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [mediaRows, setMediaRows] = useState<MediaRow[]>([]);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPosts();
@@ -65,6 +73,10 @@ export function PostDetail() {
     if (found) setPost({ ...found });
   }, [posts, id]);
 
+  useEffect(() => {
+    if (post) setMediaRows(mediaRowsFromPost(post));
+  }, [post?.id, post?.media_json, post?.image_path]);
+
   if (!post) return <p className="text-gray-400">Loading...</p>;
 
   const save = async (fields: Partial<Post>) => {
@@ -72,6 +84,49 @@ export function PostDetail() {
     const updated = await update(post.id, fields);
     setPost(updated);
     setSaving(false);
+  };
+
+  const saveMedia = async (rows: MediaRow[]) => {
+    setMediaError(null);
+    setSaving(true);
+    try {
+      const payload = persistMediaPayload(rows);
+      const updated = await update(post.id, payload);
+      setPost(updated);
+      setMediaRows(mediaRowsFromPost(updated));
+    } catch (err: unknown) {
+      setMediaError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setMediaError(null);
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(apiUrl(`/api/posts/${post.id}/upload-media`), { method: "POST", body: fd });
+      const data = (await res.json()) as { path?: string; error?: string };
+      if (!res.ok) {
+        setMediaError(data.error || "Upload failed");
+        return;
+      }
+      if (!data.path) {
+        setMediaError("No path returned");
+        return;
+      }
+      const next = [...mediaRows, { kind: "local" as const, ref: data.path }].slice(0, MAX_LINKEDIN_IMAGES);
+      await saveMedia(next);
+    } catch (err: unknown) {
+      setMediaError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -225,6 +280,97 @@ export function PostDetail() {
                 value={post.publication_date?.replace(" ", "T").slice(0, 16) || ""}
                 onChange={(e) => save({ publication_date: e.target.value })}
               />
+            </div>
+
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              <label className="block text-xs font-medium text-gray-500">
+                LinkedIn images (carousel)
+              </label>
+              <p className="text-[11px] text-gray-400 leading-snug">
+                Up to {MAX_LINKEDIN_IMAGES} images. HTTPS URLs (e.g. Cloudinary) or files under{" "}
+                <code className="bg-gray-100 px-0.5 rounded">data/</code>. Video not supported yet.
+              </p>
+              {mediaError && (
+                <p className="text-xs text-red-600">{mediaError}</p>
+              )}
+              <div className="space-y-2">
+                {mediaRows.map((row, idx) => (
+                  <div key={idx} className="rounded border border-gray-200 p-2 space-y-1.5 bg-gray-50/80">
+                    <div className="flex gap-1 items-center">
+                      <select
+                        className="text-xs border border-gray-300 rounded px-1 py-1 flex-1 min-w-0"
+                        value={row.kind}
+                        onChange={(e) => {
+                          const next = mediaRows.map((r, i) =>
+                            i === idx ? { ...r, kind: e.target.value as "local" | "url" } : r
+                          );
+                          setMediaRows(next);
+                          void saveMedia(next);
+                        }}
+                      >
+                        <option value="local">Local path</option>
+                        <option value="url">HTTPS URL</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="text-xs text-red-600 hover:text-red-800 px-1"
+                        onClick={() => {
+                          const next = mediaRows.filter((_, i) => i !== idx);
+                          setMediaRows(next);
+                          void saveMedia(next);
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <input
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono"
+                      placeholder={row.kind === "url" ? "https://…" : "data/media/… or absolute path"}
+                      value={row.ref}
+                      onChange={(e) => {
+                        const next = mediaRows.map((r, i) =>
+                          i === idx ? { ...r, ref: e.target.value } : r
+                        );
+                        setMediaRows(next);
+                      }}
+                      onBlur={() => void saveMedia(mediaRows)}
+                    />
+                    {row.ref.trim() && (
+                      <div className="pt-1">
+                        <img
+                          src={row.kind === "url" ? row.ref.trim() : apiUrl(`/${row.ref.replace(/^\/+/, "")}`)}
+                          className="w-full max-h-28 object-contain rounded border border-gray-200 bg-white"
+                          alt="Preview"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <label className="text-xs px-2 py-1.5 rounded bg-gray-800 text-white cursor-pointer hover:bg-gray-700">
+                  Upload image
+                  <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={handleMediaUpload} />
+                </label>
+                <button
+                  type="button"
+                  className="text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40"
+                  disabled={mediaRows.length >= MAX_LINKEDIN_IMAGES}
+                  onClick={() => {
+                    const next = [...mediaRows, { kind: "url" as const, ref: "" }].slice(0, MAX_LINKEDIN_IMAGES);
+                    setMediaRows(next);
+                  }}
+                >
+                  Add URL row
+                </button>
+                <button
+                  type="button"
+                  className="text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50"
+                  onClick={() => void saveMedia(mediaRows)}
+                >
+                  Save media
+                </button>
+              </div>
             </div>
 
             <div>

@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getDb, closeDb } from "./db/index.js";
@@ -79,6 +80,10 @@ export function createServer(port = 3000) {
       if (err) next();
     });
   });
+
+  const mediaDir = path.join(process.cwd(), "data", "media");
+  fs.mkdirSync(mediaDir, { recursive: true });
+  app.use("/data/media", express.static(mediaDir));
 
   const clientDist = path.join(__dirname, "../dist/client");
   const isDev = Boolean(process.env.DEV);
