@@ -43,15 +43,29 @@ export function ContenusList() {
     e.preventDefault();
     if (!formData.name.trim()) return;
 
-    // If file is attached, read it and include content_raw
-    if (formData.file) {
-      const text = await formData.file.text();
-      await createContenu({ name: formData.name, description: formData.description, type: formData.type, content_raw: text });
-    } else {
-      await createContenu({ name: formData.name, description: formData.description, url: formData.url, type: formData.type });
+    try {
+      setIngestError(null);
+      if (formData.file) {
+        const fd = new FormData();
+        fd.append("name", formData.name);
+        fd.append("description", formData.description);
+        fd.append("type", formData.type);
+        fd.append("file", formData.file);
+
+        const res = await apiFetch("/api/contenus/upload", { method: "POST", body: fd });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({ error: "Upload failed" }));
+          throw new Error(typeof payload?.error === "string" ? payload.error : "Upload failed");
+        }
+        await fetchContenus();
+      } else {
+        await createContenu({ name: formData.name, description: formData.description, url: formData.url, type: formData.type });
+      }
+      setFormData({ name: "", description: "", url: "", type: "Web", file: null });
+      setShowForm(false);
+    } catch (err: unknown) {
+      setIngestError(err instanceof Error ? err.message : String(err));
     }
-    setFormData({ name: "", description: "", url: "", type: "Web", file: null });
-    setShowForm(false);
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -234,7 +248,7 @@ export function ContenusList() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end sm:justify-end shrink-0">
-                    {c.url && !c.summary && (
+                    {(c.url || c.pdf_path) && !c.summary && (
                       <button
                         type="button"
                         className="px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 min-h-[2rem] sm:min-h-0"
