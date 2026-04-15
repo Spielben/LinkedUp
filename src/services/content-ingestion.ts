@@ -48,10 +48,23 @@ function assertSafeDataPath(filePath: string, cwd = process.cwd()): string {
 
 async function parsePdfBuffer(buffer: Buffer): Promise<string> {
   const pdfParseModule = await import("pdf-parse");
-  const pdfParse = (pdfParseModule as unknown as { default?: (value: Buffer) => Promise<{ text: string }> }).default
-    ?? (pdfParseModule as unknown as (value: Buffer) => Promise<{ text: string }>);
-  const data = await pdfParse(buffer);
-  return normalizeText(data.text);
+  const maybeLegacyFn =
+    (pdfParseModule as unknown as { default?: (value: Buffer) => Promise<{ text: string }> }).default
+    ?? (pdfParseModule as unknown as { parse?: (value: Buffer) => Promise<{ text: string }> }).parse;
+
+  if (typeof maybeLegacyFn === "function") {
+    const data = await maybeLegacyFn(buffer);
+    return normalizeText(data.text);
+  }
+
+  const PDFParseCtor = (pdfParseModule as unknown as { PDFParse?: new (options: { data: Buffer }) => { getText: () => Promise<{ text: string }> } }).PDFParse;
+  if (typeof PDFParseCtor === "function") {
+    const parser = new PDFParseCtor({ data: buffer });
+    const result = await parser.getText();
+    return normalizeText(result.text || "");
+  }
+
+  throw new Error("Unsupported pdf-parse module shape");
 }
 
 function isGoogleHost(url: URL): boolean {
@@ -111,7 +124,7 @@ export async function fetchWebContent(url: string): Promise<string> {
     },
   });
 
-  if (response.status === 403 && transformed) {
+  if ((response.status === 401 || response.status === 403) && transformed) {
     throw new Error("Document Google Drive non public. Partagez-le en lecture publique ou telechargez-le et uploadez le fichier.");
   }
 
