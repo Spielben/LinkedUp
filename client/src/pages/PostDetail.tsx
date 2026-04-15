@@ -16,16 +16,43 @@ import {
 const STATUS_OPTIONS = ["Idée", "Brouillon", "Programmé", "Publié"];
 const VERSION_OPTIONS = ["V1", "V2", "V3"];
 
+function linkedinPostHref(url: string): string {
+  const u = url.trim();
+  if (!u) return "#";
+  if (/^https?:\/\//i.test(u)) return u;
+  return `https://${u.replace(/^\/+/, "")}`;
+}
+
+/** Match server: body is publishable if final is non-empty or selected variant has text. */
+function hasPublishableBody(p: Post): boolean {
+  if ((p.final_version || "").trim()) return true;
+  const sel = p.selected_version?.trim().toUpperCase();
+  if (sel === "V1" && (p.v1 || "").trim()) return true;
+  if (sel === "V2" && (p.v2 || "").trim()) return true;
+  if (sel === "V3" && (p.v3 || "").trim()) return true;
+  return false;
+}
+
+function datetimeLocalToSqlite(v: string): string | null {
+  const t = v.trim();
+  if (!t) return null;
+  if (!t.includes("T")) return t;
+  const [d, time] = t.split("T");
+  const timePart = time.length === 5 ? `${time}:00` : time;
+  return `${d} ${timePart}`;
+}
+
 function CharCount({ text }: { text: string }) {
   const count = countLinkedInChars(text);
   const color = count > 3000 ? "text-red-600" : count > 2000 ? "text-orange-600" : "text-gray-500";
   return <span className={`text-xs ${color}`}>{count} chars</span>;
 }
 
-function CopyButton({ text, label }: { text: string; label?: string }) {
+function CopyButton({ text, label, stopPropagation }: { text: string; label?: string; stopPropagation?: boolean }) {
   const [copied, setCopied] = useState(false);
 
-  const copy = () => {
+  const copy = (e: React.MouseEvent) => {
+    if (stopPropagation) e.stopPropagation();
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -34,6 +61,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
   return (
     <button
+      type="button"
       onClick={copy}
       disabled={!text}
       className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -60,6 +88,9 @@ export function PostDetail() {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [mediaRows, setMediaRows] = useState<MediaRow[]>([]);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [publicationDateDraft, setPublicationDateDraft] = useState("");
+  const [pubDateDirty, setPubDateDirty] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPosts();
@@ -74,16 +105,62 @@ export function PostDetail() {
   }, [posts, id]);
 
   useEffect(() => {
+    setPubDateDirty(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (!post || pubDateDirty) return;
+    setPublicationDateDraft(post.publication_date?.replace(" ", "T").slice(0, 16) ?? "");
+  }, [post?.id, post?.publication_date, pubDateDirty]);
+
+  useEffect(() => {
     if (post) setMediaRows(mediaRowsFromPost(post));
   }, [post?.id, post?.media_json, post?.image_path]);
 
   if (!post) return <p className="text-gray-400">Loading...</p>;
 
   const save = async (fields: Partial<Post>) => {
+    setSaveError(null);
     setSaving(true);
-    const updated = await update(post.id, fields);
-    setPost(updated);
-    setSaving(false);
+    try {
+      const updated = await update(post.id, fields);
+      setPost(updated);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyPublicationDate = async () => {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const normalized = datetimeLocalToSqlite(publicationDateDraft);
+      const updated = await update(post.id, { publication_date: normalized });
+      setPost(updated);
+      setPubDateDirty(false);
+      setPublicationDateDraft(updated.publication_date?.replace(" ", "T").slice(0, 16) ?? "");
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearPublicationDate = async () => {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const updated = await update(post.id, { publication_date: null });
+      setPost(updated);
+      setPubDateDirty(false);
+      setPublicationDateDraft("");
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveMedia = async (rows: MediaRow[]) => {
@@ -134,8 +211,6 @@ export function PostDetail() {
     await remove(post.id);
     navigate("/posts");
   };
-
-  const displayVersion = post.final_version || post[`v${post.selected_version?.replace("V", "")}` as keyof Post] as string || "";
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -194,6 +269,11 @@ export function PostDetail() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">{saving ? "Saving..." : ""}</span>
+          {saveError && (
+            <span className="text-xs text-red-600 max-w-xs truncate" title={saveError}>
+              {saveError}
+            </span>
+          )}
           <button onClick={handleDelete} className="text-red-500 text-sm hover:text-red-700">
             Delete
           </button>
@@ -274,12 +354,36 @@ export function PostDetail() {
 
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Publication date</label>
+              <p className="text-[11px] text-gray-400 mb-1.5 leading-snug">
+                Choose date and time, then confirm — nothing is stored until you click Save.
+              </p>
               <input
                 type="datetime-local"
                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                value={post.publication_date?.replace(" ", "T").slice(0, 16) || ""}
-                onChange={(e) => save({ publication_date: e.target.value })}
+                value={publicationDateDraft}
+                onChange={(e) => {
+                  setPubDateDirty(true);
+                  setPublicationDateDraft(e.target.value);
+                }}
               />
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button
+                  type="button"
+                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40"
+                  disabled={saving}
+                  onClick={() => void applyPublicationDate()}
+                >
+                  Save scheduled date
+                </button>
+                <button
+                  type="button"
+                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-40"
+                  disabled={saving || !post.publication_date}
+                  onClick={() => void clearPublicationDate()}
+                >
+                  Clear
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-gray-100 pt-3 space-y-2">
@@ -424,7 +528,7 @@ export function PostDetail() {
                       <span className="text-xs font-bold text-gray-600">{v}</span>
                       <div className="flex items-center gap-2">
                         <CharCount text={text} />
-                        <CopyButton text={text} />
+                        <CopyButton text={text} stopPropagation />
                       </div>
                     </div>
                     <p className="text-xs text-gray-700 whitespace-pre-line line-clamp-6">{text || "(empty)"}</p>
@@ -448,7 +552,7 @@ export function PostDetail() {
               rows={10}
               value={post.final_version || ""}
               onChange={(e) => setPost({ ...post, final_version: e.target.value })}
-              onBlur={() => save({ final_version: post.final_version })}
+              onBlur={(e) => save({ final_version: e.target.value })}
               placeholder="Select a version above, or write your post here directly..."
             />
           </div>
@@ -464,7 +568,7 @@ export function PostDetail() {
               rows={3}
               value={post.first_comment || ""}
               onChange={(e) => setPost({ ...post, first_comment: e.target.value })}
-              onBlur={() => save({ first_comment: post.first_comment })}
+              onBlur={(e) => save({ first_comment: e.target.value })}
               placeholder="Optional first comment to post after publishing..."
             />
           </div>
@@ -486,7 +590,7 @@ export function PostDetail() {
               rows={2}
               value={post.optimization_instructions || ""}
               onChange={(e) => setPost({ ...post, optimization_instructions: e.target.value })}
-              onBlur={() => save({ optimization_instructions: post.optimization_instructions })}
+              onBlur={(e) => save({ optimization_instructions: e.target.value })}
               placeholder="e.g. Make it shorter, add more emojis, change the CTA..."
             />
           </div>
@@ -506,7 +610,7 @@ export function PostDetail() {
                 <span className="text-sm text-green-800 font-medium">Published on LinkedIn</span>
               </div>
               <a
-                href={post.linkedin_post_url}
+                href={linkedinPostHref(post.linkedin_post_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -517,7 +621,7 @@ export function PostDetail() {
           ) : (
             <button
               className="w-full bg-[#0A66C2] text-white py-3 rounded-lg font-medium hover:bg-[#004182] disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!(post.final_version || post.selected_version) || publishing}
+              disabled={!hasPublishableBody(post) || publishing}
               onClick={handlePublish}
             >
               {publishing ? "Publishing..." : "Publish on LinkedIn"}

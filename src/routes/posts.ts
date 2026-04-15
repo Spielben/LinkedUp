@@ -9,6 +9,19 @@ import { getPostMediaSources, resolveAllMediaSources } from "../services/post-me
 
 export const postsRouter = Router();
 
+/** Text to publish: edited final, or the selected V1/V2/V3 body — never the label "V1" etc. */
+function resolvePostBodyForPublish(post: Record<string, unknown>): string | null {
+  const final = (post.final_version as string | null)?.trim();
+  if (final) return final;
+
+  const sel = (post.selected_version as string | null)?.trim().toUpperCase();
+  if (sel === "V1" && post.v1) return String(post.v1).trim() || null;
+  if (sel === "V2" && post.v2) return String(post.v2).trim() || null;
+  if (sel === "V3" && post.v3) return String(post.v3).trim() || null;
+
+  return null;
+}
+
 const postMediaUpload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
@@ -354,7 +367,7 @@ postsRouter.post("/:id/publish", async (req, res) => {
 
   if (!post) return res.status(404).json({ error: "Post not found" });
 
-  const text = (post.final_version || post.selected_version) as string | null;
+  const text = resolvePostBodyForPublish(post);
   if (!text) return res.status(400).json({ error: "No final or selected version to publish" });
 
   if (post.linkedin_post_id) {
