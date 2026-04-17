@@ -9,6 +9,13 @@ import { getPostMediaSources, resolveAllMediaSources } from "../services/post-me
 
 export const postsRouter = Router();
 
+function ensureSignature(text: string, signature: string | null | undefined): string {
+  if (!signature?.trim()) return text;
+  const sig = signature.trim();
+  if (text.trim().endsWith(sig)) return text;
+  return `${text.trimEnd()}\n\n${sig}`;
+}
+
 /** Text to publish: edited final, or the selected V1/V2/V3 body — never the label "V1" etc. */
 function resolvePostBodyForPublish(post: Record<string, unknown>): string | null {
   const final = (post.final_version as string | null)?.trim();
@@ -253,10 +260,25 @@ V3:
     });
 
     const versions = parseVersions(content);
+    const sig = settings?.signature ?? null;
+    const v1 = versions.v1?.trim() ? ensureSignature(versions.v1.trim(), sig) : null;
+    const v2 = versions.v2?.trim() ? ensureSignature(versions.v2.trim(), sig) : null;
+    const v3 = versions.v3?.trim() ? ensureSignature(versions.v3.trim(), sig) : null;
+    const existingFinal = (post.final_version as string | null)?.trim();
+    const finalAfter =
+      existingFinal != null && existingFinal !== ""
+        ? ensureSignature(existingFinal, sig)
+        : null;
 
-    db.prepare(`
-      UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, status = 'Brouillon' WHERE id = ?
-    `).run(versions.v1 || null, versions.v2 || null, versions.v3 || null, req.params.id);
+    if (finalAfter != null) {
+      db.prepare(`
+        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, final_version = ?, status = 'Brouillon' WHERE id = ?
+      `).run(v1, v2, v3, finalAfter, req.params.id);
+    } else {
+      db.prepare(`
+        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, status = 'Brouillon' WHERE id = ?
+      `).run(v1, v2, v3, req.params.id);
+    }
 
     const cost = estimateCost(model, usage.prompt_tokens, usage.completion_tokens);
     db.prepare(`
@@ -293,6 +315,10 @@ postsRouter.post("/:id/optimize", async (req, res) => {
   if (!post) return res.status(404).json({ error: "Post not found" });
   if (!post.final_version) return res.status(400).json({ error: "No final version to optimize" });
   if (!post.optimization_instructions) return res.status(400).json({ error: "No optimization instructions provided" });
+
+  const settings = db.prepare("SELECT signature FROM settings WHERE id = 1").get() as
+    | { signature: string | null }
+    | undefined;
 
   const model = (post.model as string) || "anthropic/claude-sonnet-4";
 
@@ -336,7 +362,8 @@ Retourne uniquement le post optimisé, sans commentaire ni explication.`;
       model,
     });
 
-    db.prepare("UPDATE posts SET final_version = ? WHERE id = ?").run(content.trim(), req.params.id);
+    const optimized = ensureSignature(content.trim(), settings?.signature ?? null);
+    db.prepare("UPDATE posts SET final_version = ? WHERE id = ?").run(optimized, req.params.id);
 
     const cost = estimateCost(model, usage.prompt_tokens, usage.completion_tokens);
     db.prepare(`

@@ -23,6 +23,8 @@ function linkedinPostHref(url: string): string {
   return `https://${u.replace(/^\/+/, "")}`;
 }
 
+const PUBLISHED_STATUSES = new Set(["Publié", "Publie"]);
+
 /** Match server: body is publishable if final is non-empty or selected variant has text. */
 function hasPublishableBody(p: Post): boolean {
   if ((p.final_version || "").trim()) return true;
@@ -91,6 +93,14 @@ export function PostDetail() {
   const [publicationDateDraft, setPublicationDateDraft] = useState("");
   const [pubDateDirty, setPubDateDirty] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     fetchPosts();
@@ -100,12 +110,25 @@ export function PostDetail() {
   }, []);
 
   useEffect(() => {
+    void (async () => {
+      try {
+        const res = await apiFetch("/api/settings");
+        const data = (await res.json()) as { signature?: string | null };
+        setSignature(data.signature ?? null);
+      } catch {
+        setSignature(null);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     const found = posts.find((p) => p.id === Number(id));
     if (found) setPost({ ...found });
   }, [posts, id]);
 
   useEffect(() => {
     setPubDateDirty(false);
+    setConfirmDelete(false);
   }, [id]);
 
   useEffect(() => {
@@ -119,14 +142,20 @@ export function PostDetail() {
 
   if (!post) return <p className="text-gray-400">Loading...</p>;
 
-  const save = async (fields: Partial<Post>) => {
+  const isActuallyPublished =
+    !!post.linkedin_post_url?.trim() && PUBLISHED_STATUSES.has(post.status);
+
+  const save = async (fields: Partial<Post>, options?: { successMessage?: string }) => {
     setSaveError(null);
     setSaving(true);
     try {
       const updated = await update(post.id, fields);
       setPost(updated);
+      if (options?.successMessage) showToast(options.successMessage);
     } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveError(msg);
+      showToast(msg, "error");
     } finally {
       setSaving(false);
     }
@@ -141,8 +170,11 @@ export function PostDetail() {
       setPost(updated);
       setPubDateDirty(false);
       setPublicationDateDraft(updated.publication_date?.replace(" ", "T").slice(0, 16) ?? "");
+      showToast("Date programmée enregistrée \u2713");
     } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveError(msg);
+      showToast(msg, "error");
     } finally {
       setSaving(false);
     }
@@ -207,7 +239,10 @@ export function PostDetail() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Delete this post?")) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
     await remove(post.id);
     navigate("/posts");
   };
@@ -250,6 +285,7 @@ export function PostDetail() {
     try {
       const updated = await optimize(post.id);
       setPost(updated);
+      showToast("Post optimisé et sauvegardé \u2713");
     } catch (err: unknown) {
       setAiError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -259,6 +295,19 @@ export function PostDetail() {
 
   return (
     <div className="max-w-4xl">
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 transition-all ${
+            toast.type === "success"
+              ? "bg-green-50 border border-green-200 text-green-800"
+              : "bg-red-50 border border-red-200 text-red-800"
+          }`}
+        >
+          <span>{toast.type === "success" ? "\u2705" : "\u274C"}</span>
+          {toast.message}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -274,9 +323,33 @@ export function PostDetail() {
               {saveError}
             </span>
           )}
-          <button onClick={handleDelete} className="text-red-500 text-sm hover:text-red-700">
-            Delete
-          </button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-600 font-medium">Confirmer la suppression ?</span>
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+              >
+                Oui, supprimer
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              className="text-red-500 text-sm hover:text-red-700"
+            >
+              Supprimer
+            </button>
+          )}
         </div>
       </div>
 
@@ -522,7 +595,13 @@ export function PostDetail() {
                     className={`bg-white rounded-lg border p-3 cursor-pointer transition-colors ${
                       isSelected ? "border-blue-500 ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300"
                     }`}
-                    onClick={() => save({ selected_version: v, final_version: text })}
+                    onClick={() => {
+                      const textWithSig =
+                        signature?.trim() && !text.includes(signature.trim())
+                          ? `${text.trimEnd()}\n\n${signature.trim()}`
+                          : text;
+                      void save({ selected_version: v, final_version: textWithSig });
+                    }}
                   >
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-xs font-bold text-gray-600">{v}</span>
@@ -575,25 +654,26 @@ export function PostDetail() {
 
           {/* Optimization */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-medium">Optimization Instructions</label>
-              <button
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                disabled={!post.final_version || !post.optimization_instructions || optimizing}
-                onClick={handleOptimize}
-              >
-                {optimizing ? "Optimizing…" : "⚡ Optimize"}
-              </button>
-            </div>
+            <label className="block text-sm font-medium mb-2">Instructions d&apos;optimisation</label>
             <textarea
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
               rows={2}
               value={post.optimization_instructions || ""}
               onChange={(e) => setPost({ ...post, optimization_instructions: e.target.value })}
               onBlur={(e) => save({ optimization_instructions: e.target.value })}
-              placeholder="e.g. Make it shorter, add more emojis, change the CTA..."
+              placeholder="ex. Raccourcis le post, ajoute plus d'emojis, change le CTA..."
             />
+            <button
+              type="button"
+              className="mt-3 w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+              disabled={!post.final_version || !post.optimization_instructions || optimizing}
+              onClick={() => void handleOptimize()}
+            >
+              {optimizing ? "⏳ Optimisation en cours…" : "⚡ OPTIMISER CE POST"}
+            </button>
           </div>
+
+          <hr className="border-gray-200 my-6" />
 
           {/* Publish to LinkedIn */}
           {publishError && (
@@ -603,20 +683,34 @@ export function PostDetail() {
             </div>
           )}
 
-          {post.linkedin_post_url ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
-                <span className="text-sm text-green-800 font-medium">Published on LinkedIn</span>
+          {isActuallyPublished ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+                  <span className="text-sm text-green-800 font-medium">Published on LinkedIn</span>
+                </div>
+                <a
+                  href={linkedinPostHref(post.linkedin_post_url!)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium shrink-0"
+                >
+                  View post &rarr;
+                </a>
               </div>
-              <a
-                href={linkedinPostHref(post.linkedin_post_url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              <button
+                type="button"
+                onClick={() =>
+                  void save(
+                    { linkedin_post_url: null, linkedin_post_id: null, status: "Brouillon" },
+                    { successMessage: "Post mis à jour \u2713" }
+                  )
+                }
+                className="text-xs text-gray-500 hover:text-red-600 underline"
               >
-                View post &rarr;
-              </a>
+                Réinitialiser et republier
+              </button>
             </div>
           ) : (
             <button
