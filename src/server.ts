@@ -85,7 +85,8 @@ export function createServer(port = 3000) {
   fs.mkdirSync(mediaDir, { recursive: true });
   app.use("/data/media", express.static(mediaDir));
 
-  const clientDist = path.join(__dirname, "../dist/client");
+  // dist/src at runtime (Docker / tsc); cwd is project root (/app in container)
+  const clientDist = path.join(process.cwd(), "dist", "client");
   const isDev = Boolean(process.env.DEV);
   /** Vite dev server (UI with Tailwind HMR). Never serve stale dist/client in DEV. */
   const viteDevOrigin = (process.env.VITE_DEV_ORIGIN || "http://127.0.0.1:5173").replace(/\/$/, "");

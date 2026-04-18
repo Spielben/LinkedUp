@@ -19,4 +19,4 @@ RUN mkdir -p /app/data
 EXPOSE 3000
 ENV NODE_ENV=production
 ENV USE_ENV_CREDENTIALS=true
-CMD ["node", "dist/cli.js"]
+CMD ["node", "dist/src/cli.js"]
