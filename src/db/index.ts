@@ -125,6 +125,16 @@ function runMigrations(database: Database.Database): void {
   } catch (e) {
     // Column already exists
   }
+
+  // Migration: Normalize post statuses from French to English
+  try {
+    database.exec("UPDATE posts SET status = 'Published' WHERE status IN ('Publié', 'Publie')");
+    database.exec("UPDATE posts SET status = 'Draft'     WHERE status = 'Brouillon'");
+    database.exec("UPDATE posts SET status = 'Scheduled' WHERE status = 'Programmé'");
+    database.exec("UPDATE posts SET status = 'Idea'      WHERE status = 'Idée'");
+  } catch (e) {
+    // ignore
+  }
 }
 
 export function closeDb(): void {

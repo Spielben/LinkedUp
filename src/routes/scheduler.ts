@@ -58,7 +58,7 @@ schedulerRouter.post("/run-scheduled", async (req, res) => {
   const duePosts = db
     .prepare(
       `SELECT * FROM posts
-       WHERE status = 'Programmé'
+       WHERE status = 'Scheduled'
          AND publication_date IS NOT NULL
          AND publication_date <= datetime('now')
          AND linkedin_post_id IS NULL
@@ -87,7 +87,7 @@ schedulerRouter.post("/run-scheduled", async (req, res) => {
     if (!text) {
       const msg = "Auto-publish skipped: no final or selected version";
       db.prepare(
-        "UPDATE posts SET status = 'Idée', publish_error = ? WHERE id = ?"
+        "UPDATE posts SET status = 'Idea', publish_error = ? WHERE id = ?"
       ).run(msg, postId);
       db.prepare(
         `INSERT INTO publish_log (post_id, action, status, response_body)
@@ -118,7 +118,7 @@ schedulerRouter.post("/run-scheduled", async (req, res) => {
         `UPDATE posts SET
            linkedin_post_id  = ?,
            linkedin_post_url = ?,
-           status            = 'Publié',
+           status            = 'Published',
            publish_error     = NULL
          WHERE id = ?`
       ).run(result.postId, result.postUrl, postId);

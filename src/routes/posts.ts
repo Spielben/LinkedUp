@@ -86,7 +86,7 @@ postsRouter.post("/", (req, res) => {
     subject || null,
     description || null,
     model || "anthropic/claude-sonnet-4",
-    status || "Idée",
+    status || "Idea",
     style_id || null,
     template_id || null,
     contenu_id || null,
@@ -272,11 +272,11 @@ V3:
 
     if (finalAfter != null) {
       db.prepare(`
-        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, final_version = ?, status = 'Brouillon' WHERE id = ?
+        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, final_version = ?, status = 'Draft' WHERE id = ?
       `).run(v1, v2, v3, finalAfter, req.params.id);
     } else {
       db.prepare(`
-        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, status = 'Brouillon' WHERE id = ?
+        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, status = 'Draft' WHERE id = ?
       `).run(v1, v2, v3, req.params.id);
     }
 
@@ -420,7 +420,7 @@ postsRouter.post("/:id/publish", async (req, res) => {
       UPDATE posts SET
         linkedin_post_id = ?,
         linkedin_post_url = ?,
-        status = 'Publie',
+        status = 'Published',
         publication_date = datetime('now'),
         publish_error = NULL
       WHERE id = ?

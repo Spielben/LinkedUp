@@ -308,29 +308,29 @@ export function Dashboard() {
   }, []);
 
   const publishedPosts = posts
-    .filter((p) => p.status === "Publié" || p.status === "Publie")
+    .filter((p) => p.status === "Published")
     .sort((a, b) => {
       const dateA = a.publication_date || a.created_at;
       const dateB = b.publication_date || b.created_at;
       return dateB.localeCompare(dateA);
     });
   const lastThreePublished = publishedPosts.slice(0, 3);
-  const pipelineCount = posts.filter((p) => p.status !== "Publié" && p.status !== "Publie").length;
+  const pipelineCount = posts.filter((p) => p.status !== "Published").length;
 
   const cards = [
     { label: "In Pipeline", count: pipelineCount, href: "/posts", color: "text-blue-600" },
-    { label: "Published", count: publishedPosts.length, href: "/posts?status=Publi%C3%A9", color: "text-green-600" },
+    { label: "Published", count: publishedPosts.length, href: "/posts?status=Published", color: "text-green-600" },
     { label: "Styles", count: styles.length, href: "/styles", color: "text-purple-600" },
     { label: "Templates", count: templates.length, href: "/templates", color: "text-orange-600" },
     { label: "Contenus", count: contenus.length, href: "/contenus", color: "text-teal-600" },
   ];
 
   const published = publishedPosts.length;
-  const drafts = posts.filter((p) => p.status === "Brouillon").length;
+  const drafts = posts.filter((p) => p.status === "Draft").length;
 
   // Scheduled posts sorted by publication_date ascending — exclut ceux sans date
   const scheduledPosts = posts
-    .filter((p) => p.status === "Programmé" && p.publication_date)
+    .filter((p) => p.status === "Scheduled" && p.publication_date)
     .sort((a, b) => {
       if (!a.publication_date) return 1;
       if (!b.publication_date) return -1;
@@ -375,7 +375,7 @@ export function Dashboard() {
           <h3 className="font-medium mb-3">Post Status</h3>
           <div className="flex flex-wrap gap-6 text-sm">
             <button
-              onClick={() => navigate("/posts?status=Publié")}
+              onClick={() => navigate("/posts?status=Published")}
               className="text-green-600 hover:text-green-800 hover:underline cursor-pointer"
             >
               {published} published
@@ -383,7 +383,7 @@ export function Dashboard() {
 
             {/* Scheduled → open preview modal */}
             <button
-              onClick={scheduled > 0 ? openPreview : () => navigate("/posts?status=Programmé")}
+              onClick={scheduled > 0 ? openPreview : () => navigate("/posts?status=Scheduled")}
               className="text-teal-600 hover:text-teal-800 hover:underline cursor-pointer flex items-center gap-1"
             >
               {scheduled} scheduled
@@ -395,13 +395,13 @@ export function Dashboard() {
             </button>
 
             <button
-              onClick={() => navigate("/posts?status=Brouillon")}
+              onClick={() => navigate("/posts?status=Draft")}
               className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
             >
               {drafts} drafts
             </button>
             <button
-              onClick={() => navigate("/posts?status=Idée")}
+              onClick={() => navigate("/posts?status=Idea")}
               className="text-yellow-600 hover:text-yellow-800 hover:underline cursor-pointer"
             >
               {posts.length - published - scheduled - drafts} ideas
@@ -419,7 +419,7 @@ export function Dashboard() {
             </h3>
             {scheduledPosts.length > 3 && (
               <button
-                onClick={() => navigate("/posts?status=Programmé")}
+                onClick={() => navigate("/posts?status=Scheduled")}
                 className="text-xs text-teal-600 hover:text-teal-800 hover:underline"
               >
                 View all ({scheduledPosts.length}) →
@@ -448,7 +448,7 @@ export function Dashboard() {
             </h3>
             {publishedPosts.length > 3 && (
               <button
-                onClick={() => navigate("/posts?status=Publié")}
+                onClick={() => navigate("/posts?status=Published")}
                 className="text-xs text-green-600 hover:text-green-800 hover:underline"
               >
                 View all ({publishedPosts.length}) →

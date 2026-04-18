@@ -5,12 +5,10 @@ import { apiUrl } from "../lib/api";
 import { mediaRowsFromPost } from "../lib/post-media";
 
 const statusColors: Record<string, string> = {
-  "Idée": "bg-yellow-100 text-yellow-800",
-  "Brouillon": "bg-blue-100 text-blue-800",
-  "Programmé": "bg-teal-100 text-teal-800",
-  "Publié": "bg-green-100 text-green-800",
-  "Publie": "bg-green-100 text-green-800",
-  "❌ Erreur": "bg-red-100 text-red-800",
+  "Idea":      "bg-yellow-100 text-yellow-800",
+  "Draft":     "bg-blue-100 text-blue-800",
+  "Scheduled": "bg-teal-100 text-teal-800",
+  "Published": "bg-green-100 text-green-800",
 };
 
 function PostThumbnail({ post }: { post: Post }) {
@@ -52,12 +50,7 @@ export function PostsList() {
   useEffect(() => {
     if (statusFilter) {
       // Handle both "Publié" (with accent) and "Publie" (legacy, no accent)
-      const isPublishedFilter = statusFilter === "Publié" || statusFilter === "Publie";
-      setFilteredPosts(posts.filter((p) =>
-        isPublishedFilter
-          ? p.status === "Publié" || p.status === "Publie"
-          : p.status === statusFilter
-      ));
+      setFilteredPosts(posts.filter((p) => p.status === statusFilter));
     } else {
       setFilteredPosts(posts);
     }

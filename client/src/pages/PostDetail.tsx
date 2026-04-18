@@ -13,7 +13,7 @@ import {
   persistMediaPayload,
 } from "../lib/post-media";
 
-const STATUS_OPTIONS = ["Idée", "Brouillon", "Programmé", "Publié"];
+const STATUS_OPTIONS = ["Idea", "Draft", "Scheduled", "Published"];
 const VERSION_OPTIONS = ["V1", "V2", "V3"];
 
 // ── Mini aperçu LinkedIn (visible uniquement si image présente) ───────────────
@@ -155,7 +155,7 @@ function linkedinPostHref(url: string): string {
   return `https://${u.replace(/^\/+/, "")}`;
 }
 
-const PUBLISHED_STATUSES = new Set(["Publié", "Publie"]);
+const PUBLISHED_STATUSES = new Set(["Published"]);
 
 /** Match server: body is publishable if final is non-empty or selected variant has text. */
 function hasPublishableBody(p: Post): boolean {
@@ -1030,7 +1030,7 @@ export function PostDetail() {
                 type="button"
                 onClick={() =>
                   void save(
-                    { linkedin_post_url: null, linkedin_post_id: null, status: "Brouillon" },
+                    { linkedin_post_url: null, linkedin_post_id: null, status: "Draft" },
                     { successMessage: "Post mis à jour \u2713" }
                   )
                 }
