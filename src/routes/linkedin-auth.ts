@@ -35,7 +35,7 @@ linkedinAuthRouter.get("/setup", async (_req, res) => {
     hasClientSecret,
     redirectUri: LINKEDIN_REDIRECT_URI,
     checklist: [
-      "LinkedIn app → Auth: add Authorized redirect URL exactly: http://localhost:3000/api/linkedin/callback",
+      `LinkedIn app → Auth: add Authorized redirect URL exactly: ${LINKEDIN_REDIRECT_URI}`,
       "Products: Sign In with LinkedIn (OpenID) + Share on LinkedIn (w_member_social)",
       "Keychain: linkedin_client_id and linkedin_client_secret under service name linkdup",
     ],

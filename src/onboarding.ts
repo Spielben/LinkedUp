@@ -40,6 +40,14 @@ export async function runOnboarding(): Promise<boolean> {
     return true;
   }
 
+  if (process.env.USE_ENV_CREDENTIALS === "true") {
+    console.error(`
+  ❌ Headless / Docker: OPENROUTER_API_KEY is missing or empty.
+     Add it to .env.production on the server and ensure compose lists env_file for linkdup.
+`);
+    return false;
+  }
+
   console.log(`
   🔗 LINK'DUP — LinkedIn Content Generator
 

@@ -6,23 +6,32 @@ const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_API_BASE = "https://api.linkedin.com";
 
-export const LINKEDIN_REDIRECT_URI = "http://localhost:3000/api/linkedin/callback";
+const DEFAULT_LINKEDIN_REDIRECT = "http://localhost:3000/api/linkedin/callback";
+
+/** Must match LinkedIn app “Authorized redirect URLs” exactly (set LINKEDIN_REDIRECT_URI on the VPS). */
+export const LINKEDIN_REDIRECT_URI =
+  process.env.LINKEDIN_REDIRECT_URI?.trim() || DEFAULT_LINKEDIN_REDIRECT;
+
 const REDIRECT_URI = LINKEDIN_REDIRECT_URI;
 // Requires two LinkedIn products on your app:
 //   • "Share on LinkedIn"                       → w_member_social (post creation)
 //   • "Sign In with LinkedIn using OpenID Connect" → openid, profile (person ID + name)
 const SCOPES = "openid profile w_member_social";
 
-/** Only http(s) localhost / 127.0.0.1 — used for postMessage targetOrigin after OAuth */
+/** postMessage targetOrigin after OAuth: dev localhost, or same origin as LINKEDIN_REDIRECT_URI */
 export function isAllowedOAuthReturnOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
     if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-    return (
+    if (
       u.hostname === "localhost" ||
       u.hostname === "127.0.0.1" ||
       u.hostname === "[::1]"
-    );
+    ) {
+      return true;
+    }
+    const redirectOrigin = new URL(REDIRECT_URI).origin;
+    return origin === redirectOrigin;
   } catch {
     return false;
   }
