@@ -21,6 +21,7 @@ settingsRouter.put("/", (req, res) => {
     language,
     preferred_post_days,
     preferred_post_time,
+    timezone,
   } = req.body;
 
   const existingRow = db.prepare("SELECT * FROM settings WHERE id = 1").get() as
@@ -50,10 +51,17 @@ settingsRouter.put("/", (req, res) => {
 
   const existing = existingRow;
 
+  // Basic IANA timezone validation
+  const normalizedTimezone =
+    typeof timezone === "string" && timezone.trim().length > 0
+      ? timezone.trim()
+      : "Asia/Bangkok";
+
   if (existing) {
     db.prepare(`
       UPDATE settings
-      SET name = ?, email = ?, linkedin_url = ?, signature = ?, budget_limit = ?, language = ?, preferred_post_days = ?, preferred_post_time = ?
+      SET name = ?, email = ?, linkedin_url = ?, signature = ?, budget_limit = ?,
+          language = ?, preferred_post_days = ?, preferred_post_time = ?, timezone = ?
       WHERE id = 1
     `).run(
       name || null,
@@ -63,12 +71,13 @@ settingsRouter.put("/", (req, res) => {
       budget_limit || null,
       normalizedLanguage,
       normalizedDays,
-      normalizedTime
+      normalizedTime,
+      normalizedTimezone
     );
   } else {
     db.prepare(`
-      INSERT INTO settings (id, name, email, linkedin_url, signature, budget_limit, language, preferred_post_days, preferred_post_time)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO settings (id, name, email, linkedin_url, signature, budget_limit, language, preferred_post_days, preferred_post_time, timezone)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name || null,
       email || null,
@@ -77,7 +86,8 @@ settingsRouter.put("/", (req, res) => {
       budget_limit || null,
       normalizedLanguage,
       normalizedDays,
-      normalizedTime
+      normalizedTime,
+      normalizedTimezone
     );
   }
 

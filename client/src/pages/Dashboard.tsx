@@ -36,12 +36,15 @@ function formatDate(
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }
+  },
+  timezone?: string
 ): string {
   if (!dateStr) return "—";
   try {
-    // SQLite stores as "YYYY-MM-DD HH:MM:SS" — replace space with T for Safari
-    return new Date(dateStr.replace(" ", "T")).toLocaleString("fr-FR", opts);
+    const iso = dateStr.replace(" ", "T");
+    const withZ = iso.endsWith("Z") ? iso : iso + "Z";
+    const finalOpts = timezone ? { ...opts, timeZone: timezone } : opts;
+    return new Date(withZ).toLocaleString("fr-FR", finalOpts);
   } catch {
     return dateStr;
   }
@@ -52,9 +55,11 @@ function formatDate(
 function LinkedInPostPreview({
   post,
   authorName,
+  timezone,
 }: {
   post: Post;
   authorName: string;
+  timezone: string;
 }) {
   const text = getPostText(post);
   const imageUrl = getFirstImageUrl(post);
@@ -75,7 +80,7 @@ function LinkedInPostPreview({
           </p>
           <p className="text-xs text-gray-500">Phuket, Thailand · Production</p>
           <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-            🗓 {formatDate(post.publication_date)}
+            🗓 {formatDate(post.publication_date, undefined, timezone)}
             <span className="inline-block w-1 h-1 rounded-full bg-gray-300 mx-1" />
             🌐
           </p>
@@ -143,9 +148,11 @@ function LinkedInPostPreview({
 function ScheduledPostCard({
   post,
   onClick,
+  timezone,
 }: {
   post: Post;
   onClick: () => void;
+  timezone: string;
 }) {
   const text = getPostText(post);
   const imageUrl = getFirstImageUrl(post);
@@ -182,7 +189,7 @@ function ScheduledPostCard({
             month: "short",
             hour: "2-digit",
             minute: "2-digit",
-          })}
+          }, timezone)}
         </p>
         {text ? (
           <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed">
@@ -217,6 +224,7 @@ export function Dashboard() {
   const fetchContenus = useContenusStore((s) => s.fetch);
 
   const [authorName, setAuthorName] = useState("Spielben & Co");
+  const [timezone, setTimezone] = useState("Asia/Bangkok");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
 
@@ -227,13 +235,14 @@ export function Dashboard() {
     fetchContenus();
   }, []);
 
-  // Fetch author name from settings
+  // Fetch author name + timezone from settings
   useEffect(() => {
     void (async () => {
       try {
         const res = await apiFetch("/api/settings");
-        const data = (await res.json()) as { name?: string | null };
+        const data = (await res.json()) as { name?: string | null; timezone?: string | null };
         if (data.name?.trim()) setAuthorName(data.name.trim());
+        if (data.timezone?.trim()) setTimezone(data.timezone.trim());
       } catch {
         /* keep default */
       }
@@ -353,6 +362,7 @@ export function Dashboard() {
               <ScheduledPostCard
                 key={post.id}
                 post={post}
+                timezone={timezone}
                 onClick={() => navigate(`/posts/${post.id}`)}
               />
             ))}
@@ -418,6 +428,7 @@ export function Dashboard() {
               <LinkedInPostPreview
                 post={scheduledPosts[previewIndex]}
                 authorName={authorName}
+                timezone={timezone}
               />
 
               {/* Subject label */}

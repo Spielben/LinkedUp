@@ -10,7 +10,30 @@ interface SettingsData {
   language?: string;
   preferred_post_days?: string;
   preferred_post_time?: string;
+  timezone?: string;
 }
+
+const TIMEZONES = [
+  { value: "Pacific/Honolulu",     label: "UTC-10  Hawaii" },
+  { value: "America/Los_Angeles",  label: "UTC-8   Los Angeles, Vancouver" },
+  { value: "America/Denver",       label: "UTC-7   Denver, Phoenix" },
+  { value: "America/Chicago",      label: "UTC-6   Chicago, Mexico City" },
+  { value: "America/New_York",     label: "UTC-5   New York, Toronto" },
+  { value: "America/Sao_Paulo",    label: "UTC-3   São Paulo, Buenos Aires" },
+  { value: "Europe/London",        label: "UTC+0   London, Dublin" },
+  { value: "Europe/Paris",         label: "UTC+1   Paris, Berlin, Madrid" },
+  { value: "Europe/Helsinki",      label: "UTC+2   Helsinki, Cairo" },
+  { value: "Europe/Moscow",        label: "UTC+3   Moscow" },
+  { value: "Asia/Dubai",           label: "UTC+4   Dubai, Abu Dhabi" },
+  { value: "Asia/Karachi",         label: "UTC+5   Karachi, Islamabad" },
+  { value: "Asia/Kolkata",         label: "UTC+5:30 Mumbai, New Delhi" },
+  { value: "Asia/Dhaka",           label: "UTC+6   Dhaka, Almaty" },
+  { value: "Asia/Bangkok",         label: "UTC+7   Bangkok, Phuket, Hanoi, Jakarta" },
+  { value: "Asia/Singapore",       label: "UTC+8   Singapore, Hong Kong, KL" },
+  { value: "Asia/Tokyo",           label: "UTC+9   Tokyo, Seoul" },
+  { value: "Australia/Sydney",     label: "UTC+10  Sydney, Melbourne" },
+  { value: "Pacific/Auckland",     label: "UTC+12  Auckland" },
+] as const;
 
 interface LinkedInStatus {
   connected: boolean;
@@ -255,6 +278,23 @@ export function Settings() {
             value={settings.preferred_post_time || ""}
             onChange={(e) => setSettings({ ...settings, preferred_post_time: e.target.value })}
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+          <p className="text-xs text-gray-500 mb-2">
+            Utilisé pour afficher les dates de publication dans la bonne heure locale.
+          </p>
+          <select
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            value={settings.timezone || "Asia/Bangkok"}
+            onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+          >
+            {TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           onClick={save}

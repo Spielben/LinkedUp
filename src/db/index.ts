@@ -118,6 +118,13 @@ function runMigrations(database: Database.Database): void {
   } catch (e) {
     // Column already exists
   }
+
+  // Migration: Add timezone column to settings
+  try {
+    database.exec("ALTER TABLE settings ADD COLUMN timezone TEXT DEFAULT 'Asia/Bangkok'");
+  } catch (e) {
+    // Column already exists
+  }
 }
 
 export function closeDb(): void {
