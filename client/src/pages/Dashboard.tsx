@@ -318,11 +318,11 @@ export function Dashboard() {
   const pipelineCount = posts.filter((p) => p.status !== "Published").length;
 
   const cards = [
-    { label: "In Pipeline", count: pipelineCount, href: "/posts", color: "text-blue-600" },
+    { label: "Pipeline", count: pipelineCount, href: "/posts", color: "text-blue-600" },
     { label: "Published", count: publishedPosts.length, href: "/linkedin", color: "text-green-600" },
     { label: "Styles", count: styles.length, href: "/styles", color: "text-purple-600" },
     { label: "Templates", count: templates.length, href: "/templates", color: "text-orange-600" },
-    { label: "Contenus", count: contenus.length, href: "/contenus", color: "text-teal-600" },
+    { label: "Content", count: contenus.length, href: "/contenus", color: "text-teal-600" },
   ];
 
   const published = publishedPosts.length;
