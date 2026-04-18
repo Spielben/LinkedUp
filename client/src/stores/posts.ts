@@ -15,6 +15,7 @@ export interface Post {
   optimization_instructions: string | null;
   publication_date: string | null;
   image_path: string | null;
+  media_json: string | null;
   first_comment: string | null;
   first_comment_posted: number;
   linkedin_post_url: string | null;
@@ -73,9 +74,12 @@ export const usePostsStore = create<PostsStore>((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    const updated = await res.json();
-    set({ posts: get().posts.map((p) => (p.id === id ? updated : p)) });
-    return updated;
+    const body = (await res.json()) as Post & { error?: string };
+    if (!res.ok) {
+      throw new Error(typeof body.error === "string" ? body.error : "Update failed");
+    }
+    set({ posts: get().posts.map((p) => (p.id === id ? body : p)) });
+    return body;
   },
 
   remove: async (id) => {

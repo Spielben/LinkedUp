@@ -6,13 +6,17 @@ Self-hosted **LinkedIn content** helper: SQLite, Express API, React UI, optional
 
 ```bash
 npm install
-npm run dev:all
+npm run dev
 ```
 
 - **UI (hot reload):** http://localhost:5173  
 - **API + OAuth callback:** http://localhost:3000  
 
+`npm run dev` is the same as `npm run dev:all` (one terminal, API + Vite). For **first-time interactive onboarding** without hot-reload UI, use `npm run dev:onboard` (API only on :3000, static UI after build).
+
 See [client/.env.example](client/.env.example) if the UI cannot reach the API.
+
+**Advanced / debugging:** `npm run dev:api` (API only, `DEV=1`) and `npm run dev:client` (Vite only) if you prefer two terminals.
 
 Production-style run after build:
 
@@ -31,7 +35,7 @@ npm start
 | `.env` / `client/.env` | Local files | Yes (see `.gitignore`) |
 | SQLite database | `data/` | Yes (ignored) |
 
-First-time setup without `DEV=1` runs onboarding; in dev you usually use `npm run dev:api` or `npm run dev:all` (see `package.json`).
+First-time setup: `npm run dev:onboard` runs onboarding (no `DEV=1`). Day-to-day dev: `npm run dev` (see `package.json`).
 
 ## Security model
 
@@ -54,6 +58,10 @@ npm test   # passes even when no test files exist yet
 - **[CHANGELOG.md](CHANGELOG.md)** — version history.
 - **[RELEASING.md](RELEASING.md)** — tag + publish a **GitHub Release**.
 - **Releases:** https://github.com/Spielben/LinkedUp/releases
+
+## Documentation
+
+- **[docs/README.md](docs/README.md)** — index: self-hosted / VPS runbook and architecture, security, contributing, optional feature briefs.
 
 ## Open source checklist
 

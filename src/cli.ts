@@ -13,8 +13,8 @@ async function main() {
   const port = parseInt(process.env.PORT || "3000", 10);
   createServer(port);
 
-  // Open browser in production (not during dev)
-  if (!process.env.DEV) {
+  // Open browser in production (not during dev / not on headless VPS with env credentials)
+  if (!process.env.DEV && process.env.USE_ENV_CREDENTIALS !== "true") {
     const { default: open } = await import("open");
     await open(`http://localhost:${port}`);
   }

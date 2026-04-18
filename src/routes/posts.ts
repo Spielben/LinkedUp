@@ -1,9 +1,53 @@
 import { Router } from "express";
+import multer from "multer";
+import fs from "node:fs";
+import path from "node:path";
 import { getDb } from "../db/index.js";
 import { callOpenRouter, estimateCost } from "../services/openrouter.js";
-import { publishTextPost, publishImagePost, publishComment } from "../services/linkedin.js";
+import { publishTextPost, publishPostWithImageBuffers, publishComment } from "../services/linkedin.js";
+import { getPostMediaSources, resolveAllMediaSources } from "../services/post-media.js";
 
 export const postsRouter = Router();
+
+function ensureSignature(text: string, signature: string | null | undefined): string {
+  if (!signature?.trim()) return text;
+  const sig = signature.trim();
+  if (text.trim().endsWith(sig)) return text;
+  return `${text.trimEnd()}\n\n${sig}`;
+}
+
+/** Text to publish: edited final, or the selected V1/V2/V3 body — never the label "V1" etc. */
+function resolvePostBodyForPublish(post: Record<string, unknown>): string | null {
+  const final = (post.final_version as string | null)?.trim();
+  if (final) return final;
+
+  const sel = (post.selected_version as string | null)?.trim().toUpperCase();
+  if (sel === "V1" && post.v1) return String(post.v1).trim() || null;
+  if (sel === "V2" && post.v2) return String(post.v2).trim() || null;
+  if (sel === "V3" && post.v3) return String(post.v3).trim() || null;
+
+  return null;
+}
+
+const postMediaUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const dir = path.join(process.cwd(), "data", "media", "posts", String(req.params.id));
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || "";
+      const safe = /^\.(jpe?g|png|gif|webp)$/i.test(ext) ? ext.toLowerCase() : ".bin";
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${safe}`);
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(file.mimetype);
+    cb(null, ok);
+  },
+});
 
 postsRouter.get("/", (_req, res) => {
   const db = getDb();
@@ -59,6 +103,19 @@ postsRouter.put("/:id", (req, res) => {
 
   for (const [key, value] of Object.entries(fields)) {
     if (key === "id") continue;
+    if (key === "media_json") {
+      if (value === null || value === "") {
+        setClauses.push("media_json = ?");
+        values.push(null);
+      } else if (Array.isArray(value)) {
+        setClauses.push("media_json = ?");
+        values.push(JSON.stringify(value));
+      } else {
+        setClauses.push("media_json = ?");
+        values.push(value);
+      }
+      continue;
+    }
     setClauses.push(`${key} = ?`);
     values.push(value);
   }
@@ -83,6 +140,31 @@ postsRouter.delete("/:id", (req, res) => {
   const db = getDb();
   db.prepare("DELETE FROM posts WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
+});
+
+// ── Upload image file → data/media/posts/:id/ (for LinkedIn publish) ───────
+postsRouter.post("/:id/upload-media", (req, res, next) => {
+  postMediaUpload.single("file")(req, res, (err: unknown) => {
+    if (err) {
+      const msg =
+        err instanceof multer.MulterError
+          ? err.code === "LIMIT_FILE_SIZE"
+            ? "File too large (max 15 MB)"
+            : err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      return res.status(400).json({ error: msg });
+    }
+    next();
+  });
+}, (req, res) => {
+  const db = getDb();
+  const exists = db.prepare("SELECT id FROM posts WHERE id = ?").get(req.params.id);
+  if (!exists) return res.status(404).json({ error: "Post not found" });
+  if (!req.file) return res.status(400).json({ error: "No file (field name: file)" });
+  const rel = path.relative(process.cwd(), req.file.path);
+  res.json({ path: rel.split(path.sep).join("/") });
 });
 
 // ── AI: Generate V1 / V2 / V3 ─────────────────────────────────────────────
@@ -178,10 +260,25 @@ V3:
     });
 
     const versions = parseVersions(content);
+    const sig = settings?.signature ?? null;
+    const v1 = versions.v1?.trim() ? ensureSignature(versions.v1.trim(), sig) : null;
+    const v2 = versions.v2?.trim() ? ensureSignature(versions.v2.trim(), sig) : null;
+    const v3 = versions.v3?.trim() ? ensureSignature(versions.v3.trim(), sig) : null;
+    const existingFinal = (post.final_version as string | null)?.trim();
+    const finalAfter =
+      existingFinal != null && existingFinal !== ""
+        ? ensureSignature(existingFinal, sig)
+        : null;
 
-    db.prepare(`
-      UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, status = 'Brouillon' WHERE id = ?
-    `).run(versions.v1 || null, versions.v2 || null, versions.v3 || null, req.params.id);
+    if (finalAfter != null) {
+      db.prepare(`
+        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, final_version = ?, status = 'Brouillon' WHERE id = ?
+      `).run(v1, v2, v3, finalAfter, req.params.id);
+    } else {
+      db.prepare(`
+        UPDATE posts SET v1 = ?, v2 = ?, v3 = ?, status = 'Brouillon' WHERE id = ?
+      `).run(v1, v2, v3, req.params.id);
+    }
 
     const cost = estimateCost(model, usage.prompt_tokens, usage.completion_tokens);
     db.prepare(`
@@ -218,6 +315,10 @@ postsRouter.post("/:id/optimize", async (req, res) => {
   if (!post) return res.status(404).json({ error: "Post not found" });
   if (!post.final_version) return res.status(400).json({ error: "No final version to optimize" });
   if (!post.optimization_instructions) return res.status(400).json({ error: "No optimization instructions provided" });
+
+  const settings = db.prepare("SELECT signature FROM settings WHERE id = 1").get() as
+    | { signature: string | null }
+    | undefined;
 
   const model = (post.model as string) || "anthropic/claude-sonnet-4";
 
@@ -261,7 +362,8 @@ Retourne uniquement le post optimisé, sans commentaire ni explication.`;
       model,
     });
 
-    db.prepare("UPDATE posts SET final_version = ? WHERE id = ?").run(content.trim(), req.params.id);
+    const optimized = ensureSignature(content.trim(), settings?.signature ?? null);
+    db.prepare("UPDATE posts SET final_version = ? WHERE id = ?").run(optimized, req.params.id);
 
     const cost = estimateCost(model, usage.prompt_tokens, usage.completion_tokens);
     db.prepare(`
@@ -292,7 +394,7 @@ postsRouter.post("/:id/publish", async (req, res) => {
 
   if (!post) return res.status(404).json({ error: "Post not found" });
 
-  const text = (post.final_version || post.selected_version) as string | null;
+  const text = resolvePostBodyForPublish(post);
   if (!text) return res.status(400).json({ error: "No final or selected version to publish" });
 
   if (post.linkedin_post_id) {
@@ -300,12 +402,15 @@ postsRouter.post("/:id/publish", async (req, res) => {
   }
 
   try {
-    // Publish text or text+image
     let result: { postId: string; postUrl: string };
-    const imagePath = post.image_path as string | null;
+    const sources = getPostMediaSources({
+      media_json: post.media_json as string | null,
+      image_path: post.image_path as string | null,
+    });
 
-    if (imagePath) {
-      result = await publishImagePost(text, imagePath);
+    if (sources.length > 0) {
+      const buffers = await resolveAllMediaSources(sources, process.cwd());
+      result = await publishPostWithImageBuffers(text, buffers);
     } else {
       result = await publishTextPost(text);
     }

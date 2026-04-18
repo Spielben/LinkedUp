@@ -6,23 +6,32 @@ const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_API_BASE = "https://api.linkedin.com";
 
-export const LINKEDIN_REDIRECT_URI = "http://localhost:3000/api/linkedin/callback";
+const DEFAULT_LINKEDIN_REDIRECT = "http://localhost:3000/api/linkedin/callback";
+
+/** Must match LinkedIn app “Authorized redirect URLs” exactly (set LINKEDIN_REDIRECT_URI on the VPS). */
+export const LINKEDIN_REDIRECT_URI =
+  process.env.LINKEDIN_REDIRECT_URI?.trim() || DEFAULT_LINKEDIN_REDIRECT;
+
 const REDIRECT_URI = LINKEDIN_REDIRECT_URI;
 // Requires two LinkedIn products on your app:
 //   • "Share on LinkedIn"                       → w_member_social (post creation)
 //   • "Sign In with LinkedIn using OpenID Connect" → openid, profile (person ID + name)
 const SCOPES = "openid profile w_member_social";
 
-/** Only http(s) localhost / 127.0.0.1 — used for postMessage targetOrigin after OAuth */
+/** postMessage targetOrigin after OAuth: dev localhost, or same origin as LINKEDIN_REDIRECT_URI */
 export function isAllowedOAuthReturnOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
     if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-    return (
+    if (
       u.hostname === "localhost" ||
       u.hostname === "127.0.0.1" ||
       u.hostname === "[::1]"
-    );
+    ) {
+      return true;
+    }
+    const redirectOrigin = new URL(REDIRECT_URI).origin;
+    return origin === redirectOrigin;
   } catch {
     return false;
   }
@@ -352,17 +361,11 @@ export async function publishTextPost(text: string): Promise<{
   return { postId, postUrl };
 }
 
-export async function publishImagePost(text: string, imagePath: string): Promise<{
-  postId: string;
-  postUrl: string;
-}> {
-  const accessToken = await getAccessToken();
-  const personUrn = await getCredential("linkedin_person_urn");
-  if (!personUrn) throw new Error("LinkedIn person URN not found. Reconnect your account.");
-
-  const author = `urn:li:person:${personUrn}`;
-
-  // Step 1: Register the image upload
+async function registerAndUploadImageBuffer(
+  accessToken: string,
+  author: string,
+  imageBuffer: Buffer
+): Promise<string> {
   const registerRes = await fetch(`${LINKEDIN_API_BASE}/v2/assets?action=registerUpload`, {
     method: "POST",
     headers: {
@@ -406,19 +409,13 @@ export async function publishImagePost(text: string, imagePath: string): Promise
     ].uploadUrl;
   const asset = registerData.value.asset;
 
-  // Step 2: Upload the image binary
-  const absolutePath = path.isAbsolute(imagePath)
-    ? imagePath
-    : path.join(process.cwd(), imagePath);
-  const imageBuffer = fs.readFileSync(absolutePath);
-
   const uploadRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/octet-stream",
     },
-    body: imageBuffer,
+    body: new Uint8Array(imageBuffer),
   });
 
   if (!uploadRes.ok) {
@@ -426,7 +423,34 @@ export async function publishImagePost(text: string, imagePath: string): Promise
     throw new Error(`LinkedIn image upload failed (${uploadRes.status}): ${errText}`);
   }
 
-  // Step 3: Create the post with the image
+  return asset;
+}
+
+/**
+ * Publish a text post with one or more images (single image or carousel).
+ * Empty buffer list falls back to text-only.
+ */
+export async function publishPostWithImageBuffers(
+  text: string,
+  imageBuffers: Buffer[],
+  retried401 = false
+): Promise<{ postId: string; postUrl: string }> {
+  if (imageBuffers.length === 0) {
+    return publishTextPost(text);
+  }
+
+  const accessToken = await getAccessToken();
+  const personUrn = await getCredential("linkedin_person_urn");
+  if (!personUrn) throw new Error("LinkedIn person URN not found. Reconnect your account.");
+
+  const author = `urn:li:person:${personUrn}`;
+
+  const media: { status: string; media: string }[] = [];
+  for (const buf of imageBuffers) {
+    const asset = await registerAndUploadImageBuffer(accessToken, author, buf);
+    media.push({ status: "READY", media: asset });
+  }
+
   const body = {
     author,
     lifecycleState: "PUBLISHED",
@@ -434,12 +458,7 @@ export async function publishImagePost(text: string, imagePath: string): Promise
       "com.linkedin.ugc.ShareContent": {
         shareCommentary: { text },
         shareMediaCategory: "IMAGE",
-        media: [
-          {
-            status: "READY",
-            media: asset,
-          },
-        ],
+        media,
       },
     },
     visibility: {
@@ -459,13 +478,31 @@ export async function publishImagePost(text: string, imagePath: string): Promise
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`LinkedIn publish with image failed (${res.status}): ${errText}`);
+    if (res.status === 401 && !retried401) {
+      try {
+        await refreshAccessToken();
+        return publishPostWithImageBuffers(text, imageBuffers, true);
+      } catch {
+        throw new Error(`LinkedIn auth expired. Reconnect in Settings. (${errText})`);
+      }
+    }
+    throw new Error(`LinkedIn publish with image(s) failed (${res.status}): ${errText}`);
   }
 
   const postId = res.headers.get("x-restli-id") || "";
   const postUrl = `https://www.linkedin.com/feed/update/${postId}`;
 
   return { postId, postUrl };
+}
+
+/** Single local file — same pipeline as {@link publishPostWithImageBuffers}. */
+export async function publishImagePost(text: string, imagePath: string): Promise<{
+  postId: string;
+  postUrl: string;
+}> {
+  const absolutePath = path.isAbsolute(imagePath) ? imagePath : path.join(process.cwd(), imagePath);
+  const imageBuffer = fs.readFileSync(absolutePath);
+  return publishPostWithImageBuffers(text, [imageBuffer]);
 }
 
 // ── Post a comment ─────────────────────────────────────────────────────────

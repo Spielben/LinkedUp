@@ -57,6 +57,13 @@ function runMigrations(database: Database.Database): void {
     // Column already exists, ignore
   }
 
+  // Migration: JSON blob for LinkedIn OAuth tokens when USE_ENV_CREDENTIALS=true (VPS)
+  try {
+    database.exec("ALTER TABLE settings ADD COLUMN linkedin_tokens TEXT");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   // Migration: Create linkedin_posts table
   try {
     database.exec(`
@@ -103,6 +110,13 @@ function runMigrations(database: Database.Database): void {
     database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_linkedin_posts_url ON linkedin_posts(linkedin_url)");
   } catch (e) {
     // Index already exists
+  }
+
+  // Migration: posts.media_json — ordered list of { kind, ref } for LinkedIn images / carousel
+  try {
+    database.exec("ALTER TABLE posts ADD COLUMN media_json TEXT");
+  } catch (e) {
+    // Column already exists
   }
 }
 

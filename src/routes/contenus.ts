@@ -1,9 +1,37 @@
 import { Router } from "express";
+import multer from "multer";
+import fs from "node:fs";
+import path from "node:path";
 import { getDb } from "../db/index.js";
 import { callOpenRouter, estimateCost } from "../services/openrouter.js";
-import { fetchWebContent, fetchYouTubeTranscript, fetchPdfContent } from "../services/content-ingestion.js";
+import { extractFileContent, fetchWebContent, fetchYouTubeTranscript } from "../services/content-ingestion.js";
 
 export const contenusRouter = Router();
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const ALLOWED_CONTENT_TYPES = new Set(["PDF", "Article"]);
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "text/plain",
+  "text/html",
+  "text/markdown",
+  "application/markdown",
+  "application/x-markdown",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+const contenuUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+  fileFilter: (_req, file, cb) => {
+    cb(null, ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase()));
+  },
+});
+
+function sanitizeUploadFilename(originalName: string): string {
+  const base = path.basename(originalName).replace(/[^\w.-]+/g, "_");
+  const trimmed = base.replace(/^_+|_+$/g, "");
+  return trimmed || `upload-${Date.now()}`;
+}
 
 contenusRouter.get("/", (_req, res) => {
   const db = getDb();
@@ -25,6 +53,52 @@ contenusRouter.post("/", (req, res) => {
     "INSERT INTO contenus (name, description, url, type, content_raw) VALUES (?, ?, ?, ?, ?)"
   ).run(name, description || null, url || null, type || null, content_raw || null);
   res.status(201).json({ id: result.lastInsertRowid });
+});
+
+contenusRouter.post("/upload", (req, res, next) => {
+  contenuUpload.single("file")(req, res, (err: unknown) => {
+    if (!err) return next();
+    const msg =
+      err instanceof multer.MulterError
+        ? err.code === "LIMIT_FILE_SIZE"
+          ? "File too large (max 20 MB)"
+          : err.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    return res.status(400).json({ error: msg });
+  });
+}, (req, res) => {
+  const db = getDb();
+  const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+  const description = typeof req.body.description === "string" ? req.body.description.trim() : "";
+  const type = typeof req.body.type === "string" ? req.body.type.trim() : "";
+
+  if (!name) return res.status(400).json({ error: "Name is required" });
+  if (!ALLOWED_CONTENT_TYPES.has(type)) return res.status(400).json({ error: "Type must be PDF or Article" });
+  if (!req.file) return res.status(400).json({ error: "No file (field name: file)" });
+
+  const result = db.prepare(
+    "INSERT INTO contenus (name, description, type, status) VALUES (?, ?, ?, 'pending')"
+  ).run(name, description || null, type);
+  const id = Number(result.lastInsertRowid);
+  const uploadDir = path.join(process.cwd(), "data", "contenus", String(id));
+
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    const safeName = sanitizeUploadFilename(req.file.originalname);
+    const absolutePath = path.join(uploadDir, safeName);
+    fs.writeFileSync(absolutePath, req.file.buffer);
+    const relativePath = path.relative(process.cwd(), absolutePath).split(path.sep).join("/");
+
+    db.prepare("UPDATE contenus SET pdf_path = ? WHERE id = ?").run(relativePath, id);
+    const created = db.prepare("SELECT * FROM contenus WHERE id = ?").get(id);
+    return res.status(201).json(created);
+  } catch (err: unknown) {
+    db.prepare("DELETE FROM contenus WHERE id = ?").run(id);
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
+  }
 });
 
 contenusRouter.put("/:id", (req, res) => {
@@ -72,8 +146,10 @@ contenusRouter.post("/:id/ingest", async (req, res) => {
 
     if (url && (url.includes("youtube.com") || url.includes("youtu.be"))) {
       content_raw = await fetchYouTubeTranscript(url);
-    } else if (type === "PDF" || pdf_path) {
-      content_raw = await fetchPdfContent(pdf_path || "");
+    } else if (pdf_path) {
+      content_raw = await extractFileContent(pdf_path);
+    } else if (type === "PDF" || type === "Article") {
+      return res.status(400).json({ error: "No uploaded file found for this content" });
     } else if (url) {
       content_raw = await fetchWebContent(url);
     } else {

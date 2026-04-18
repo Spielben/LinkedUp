@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getDb, closeDb } from "./db/index.js";
@@ -80,7 +81,12 @@ export function createServer(port = 3000) {
     });
   });
 
-  const clientDist = path.join(__dirname, "../dist/client");
+  const mediaDir = path.join(process.cwd(), "data", "media");
+  fs.mkdirSync(mediaDir, { recursive: true });
+  app.use("/data/media", express.static(mediaDir));
+
+  // dist/src at runtime (Docker / tsc); cwd is project root (/app in container)
+  const clientDist = path.join(process.cwd(), "dist", "client");
   const isDev = Boolean(process.env.DEV);
   /** Vite dev server (UI with Tailwind HMR). Never serve stale dist/client in DEV. */
   const viteDevOrigin = (process.env.VITE_DEV_ORIGIN || "http://127.0.0.1:5173").replace(/\/$/, "");
@@ -107,8 +113,8 @@ export function createServer(port = 3000) {
     if (isDev) {
       console.log(`\n  🔗 LINK'DUP API + OAuth: http://localhost:${port}`);
       console.log(`  📱 Open the UI (Vite + responsive CSS): ${viteDevOrigin}`);
-      console.log(`     Run in another terminal: npm run dev:client`);
-      console.log(`     Or once: npm run dev:all\n`);
+      console.log(`     Start API + UI together: npm run dev`);
+      console.log(`     (UI only: npm run dev:client)\n`);
     } else {
       console.log(`\n  🔗 LINK'DUP running at http://localhost:${port}\n`);
     }

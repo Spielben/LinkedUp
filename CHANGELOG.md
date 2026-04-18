@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `dev:onboard` script: interactive onboarding + API only (previous default `dev` behavior).
+- LinkedIn **carousel / multi-image** posts: `posts.media_json` (`{ kind: "local"|"url", ref }[]`), upload to `data/media/posts/:id/`, HTTPS URLs with SSRF protections; legacy `image_path` still works.
+
 ### Changed
+- `npm run dev` now starts API + Vite in one terminal (same as `dev:all`); `dev:all` kept as an alias.
 ### Fixed
 ### Removed
 

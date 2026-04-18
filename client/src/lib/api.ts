@@ -70,7 +70,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
     }
     if (e instanceof TypeError) {
       throw new Error(
-        `Cannot reach the API (${origin}). Open a terminal, cd into the linkdup project folder, run: npm run dev — the server must be listening on port 3000. If you use another host/port, set VITE_API_ORIGIN in client/.env (e.g. VITE_API_ORIGIN=http://localhost:3000).`
+        `Cannot reach the API (${origin}). From the linkdup project folder, run: npm run dev (API + Vite) — the API must be listening on port 3000. If you use another host/port, set VITE_API_ORIGIN in client/.env (e.g. VITE_API_ORIGIN=http://localhost:3000).`
       );
     }
     throw e;
@@ -83,7 +83,7 @@ export async function readApiJson<T>(res: Response): Promise<T> {
   const trimmed = text.trim();
   if (trimmed.startsWith("<!") || trimmed.startsWith("<html")) {
     throw new Error(
-      "The app received a web page instead of API JSON. Run the backend on port 3000 (npm run dev from linkdup). If the UI is not on :3000, ensure the API is reachable; set VITE_API_ORIGIN in client/.env if it uses another URL."
+      "The app received a web page instead of API JSON. Run the stack from linkdup (npm run dev) so the API is on port 3000. If the UI is not on :3000, ensure the API is reachable; set VITE_API_ORIGIN in client/.env if it uses another URL."
     );
   }
   try {
