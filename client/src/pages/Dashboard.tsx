@@ -250,9 +250,9 @@ export function Dashboard() {
   const published = posts.filter((p) => p.status === "Publié" || p.status === "Publie").length;
   const drafts = posts.filter((p) => p.status === "Brouillon").length;
 
-  // Scheduled posts sorted by publication_date ascending
+  // Scheduled posts sorted by publication_date ascending — exclut ceux sans date
   const scheduledPosts = posts
-    .filter((p) => p.status === "Programmé")
+    .filter((p) => p.status === "Programmé" && p.publication_date)
     .sort((a, b) => {
       if (!a.publication_date) return 1;
       if (!b.publication_date) return -1;
