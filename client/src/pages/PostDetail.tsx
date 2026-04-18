@@ -16,6 +16,94 @@ import {
 const STATUS_OPTIONS = ["Idée", "Brouillon", "Programmé", "Publié"];
 const VERSION_OPTIONS = ["V1", "V2", "V3"];
 
+// ── Mini aperçu LinkedIn (visible uniquement si image présente) ───────────────
+function LinkedInMiniPreview({
+  post,
+  mediaRows,
+  authorName,
+}: {
+  post: Post;
+  mediaRows: MediaRow[];
+  authorName: string;
+}) {
+  const text = (() => {
+    if (post.final_version?.trim()) return post.final_version.trim();
+    const sel = post.selected_version?.trim().toUpperCase();
+    if (sel === "V1" && post.v1?.trim()) return post.v1.trim();
+    if (sel === "V2" && post.v2?.trim()) return post.v2.trim();
+    if (sel === "V3" && post.v3?.trim()) return post.v3.trim();
+    return "";
+  })();
+
+  const firstImage = mediaRows[0];
+  if (!firstImage) return null;
+
+  const imageUrl =
+    firstImage.kind === "url"
+      ? firstImage.ref.trim()
+      : apiUrl(`/${firstImage.ref.trim().replace(/^\/+/, "")}`);
+
+  if (!imageUrl) return null;
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <label className="block text-sm font-medium mb-3 text-gray-700">
+        Aperçu LinkedIn
+      </label>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-2 p-3 pb-2">
+          <div className="w-8 h-8 rounded-full bg-[#0A66C2] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+            {authorName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p className="font-semibold text-xs text-gray-900">{authorName}</p>
+            <p className="text-[10px] text-gray-400">
+              {post.publication_date
+                ? new Date(
+                    post.publication_date.replace(" ", "T")
+                  ).toLocaleString("fr-FR", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "Non programmé"}{" "}
+              • 🌐
+            </p>
+          </div>
+        </div>
+        {/* Texte */}
+        {text && (
+          <p className="px-3 pb-2 text-xs text-gray-700 line-clamp-4 whitespace-pre-line leading-relaxed">
+            {text}
+          </p>
+        )}
+        {/* Image */}
+        <img
+          src={imageUrl}
+          alt="Aperçu media"
+          className="w-full object-cover max-h-52"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
+        />
+        {/* Barre d'engagement décorative */}
+        <div className="px-3 py-1.5 border-t border-gray-100 flex gap-1">
+          {["👍 Like", "💬 Comment", "↩ Repost", "✉ Send"].map((label) => (
+            <span
+              key={label}
+              className="flex-1 text-[10px] text-gray-400 text-center py-1"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function linkedinPostHref(url: string): string {
   const u = url.trim();
   if (!u) return "#";
@@ -94,6 +182,7 @@ export function PostDetail() {
   const [pubDateDirty, setPubDateDirty] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  const [authorName, setAuthorName] = useState("Spielben & Co");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -113,8 +202,9 @@ export function PostDetail() {
     void (async () => {
       try {
         const res = await apiFetch("/api/settings");
-        const data = (await res.json()) as { signature?: string | null };
+        const data = (await res.json()) as { signature?: string | null; name?: string | null };
         setSignature(data.signature ?? null);
+        if (data.name?.trim()) setAuthorName(data.name.trim());
       } catch {
         setSignature(null);
       }
@@ -635,6 +725,15 @@ export function PostDetail() {
               placeholder="Select a version above, or write your post here directly..."
             />
           </div>
+
+          {/* Aperçu LinkedIn — visible uniquement si image présente */}
+          {mediaRows.length > 0 && (
+            <LinkedInMiniPreview
+              post={post}
+              mediaRows={mediaRows}
+              authorName={authorName}
+            />
+          )}
 
           {/* First comment */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
