@@ -21,10 +21,12 @@ function LinkedInMiniPreview({
   post,
   mediaRows,
   authorName,
+  timezone,
 }: {
   post: Post;
   mediaRows: MediaRow[];
   authorName: string;
+  timezone: string;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -48,12 +50,13 @@ function LinkedInMiniPreview({
   if (!imageUrl) return null;
 
   const dateStr = post.publication_date
-    ? new Date(post.publication_date.replace(" ", "T")).toLocaleString("fr-FR", {
+    ? new Intl.DateTimeFormat("fr-FR", {
+        timeZone: timezone,
         day: "numeric",
         month: "short",
         hour: "2-digit",
         minute: "2-digit",
-      })
+      }).format(new Date(post.publication_date.replace(" ", "T") + "Z"))
     : "Non programmé";
 
   const PreviewCard = ({ compact }: { compact: boolean }) => (
@@ -164,13 +167,49 @@ function hasPublishableBody(p: Post): boolean {
   return false;
 }
 
-function datetimeLocalToSqlite(v: string): string | null {
+/** Datetime-local input (heure locale) → UTC stocké en base SQLite */
+/**
+ * Convertit une saisie datetime-local (heure dans `timezone`) → UTC pour SQLite.
+ * Indépendant du timezone du navigateur — utilise toujours le timezone des Settings.
+ */
+function datetimeLocalToUtcSqlite(v: string, timezone: string): string | null {
   const t = v.trim();
   if (!t) return null;
-  if (!t.includes("T")) return t;
-  const [d, time] = t.split("T");
-  const timePart = time.length === 5 ? `${time}:00` : time;
-  return `${d} ${timePart}`;
+  const norm = t.includes("T") ? t : t.replace(" ", "T");
+
+  // Étape 1 : on traite la saisie naïvement comme UTC
+  const naiveUtc = new Date(norm + "Z");
+  if (isNaN(naiveUtc.getTime())) return null;
+
+  // Étape 2 : on affiche cette "naiveUtc" dans le timezone voulu (ex: Bangkok)
+  const tzStr = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: timezone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).format(naiveUtc).replace(" ", "T");
+
+  // Étape 3 : l'offset = différence entre représentation locale et naiveUtc
+  // Ex: Bangkok UTC+7 → naiveUtc=23:20UTC, tzStr=06:20 lendemain → offsetMs = +7h
+  const tzAsUtc = new Date(tzStr + "Z");
+  const offsetMs = tzAsUtc.getTime() - naiveUtc.getTime();
+
+  // Étape 4 : vraie UTC = naiveUtc - offsetMs
+  const actualUtc = new Date(naiveUtc.getTime() - offsetMs);
+  return actualUtc.toISOString().replace("T", " ").slice(0, 19);
+}
+
+/** UTC stocké en base → valeur datetime-local affichée dans `timezone` */
+function sqliteUtcToDatetimeLocal(v: string | null | undefined, timezone: string): string {
+  if (!v) return "";
+  const date = new Date(v.replace(" ", "T") + "Z");
+  if (isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: timezone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    hour12: false,
+  }).format(date).replace(" ", "T").slice(0, 16);
 }
 
 function CharCount({ text }: { text: string }) {
@@ -224,6 +263,7 @@ export function PostDetail() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [authorName, setAuthorName] = useState("Spielben & Co");
+  const [timezone, setTimezone] = useState("Asia/Bangkok");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -243,9 +283,10 @@ export function PostDetail() {
     void (async () => {
       try {
         const res = await apiFetch("/api/settings");
-        const data = (await res.json()) as { signature?: string | null; name?: string | null };
+        const data = (await res.json()) as { signature?: string | null; name?: string | null; timezone?: string | null };
         setSignature(data.signature ?? null);
         if (data.name?.trim()) setAuthorName(data.name.trim());
+        if (data.timezone?.trim()) setTimezone(data.timezone.trim());
       } catch {
         setSignature(null);
       }
@@ -264,7 +305,7 @@ export function PostDetail() {
 
   useEffect(() => {
     if (!post || pubDateDirty) return;
-    setPublicationDateDraft(post.publication_date?.replace(" ", "T").slice(0, 16) ?? "");
+    setPublicationDateDraft(sqliteUtcToDatetimeLocal(post.publication_date, timezone));
   }, [post?.id, post?.publication_date, pubDateDirty]);
 
   useEffect(() => {
@@ -296,7 +337,7 @@ export function PostDetail() {
     setSaveError(null);
     setSaving(true);
     try {
-      const normalized = datetimeLocalToSqlite(publicationDateDraft);
+      const normalized = datetimeLocalToUtcSqlite(publicationDateDraft, timezone);
       const updated = await update(post.id, { publication_date: normalized });
       setPost(updated);
       setPubDateDirty(false);
@@ -773,6 +814,7 @@ export function PostDetail() {
               post={post}
               mediaRows={mediaRows}
               authorName={authorName}
+              timezone={timezone}
             />
           )}
 

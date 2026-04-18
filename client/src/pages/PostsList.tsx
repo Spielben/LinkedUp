@@ -137,7 +137,7 @@ export function PostsList() {
                   <td className="px-4 py-3 text-gray-500">
                     {post.publication_date
                       ? new Date(
-                          post.publication_date.replace(" ", "T")
+                          post.publication_date.replace(" ", "T") + "Z"
                         ).toLocaleDateString("fr-FR")
                       : post.created_at.split(" ")[0]}
                   </td>
