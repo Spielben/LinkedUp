@@ -1,0 +1,13 @@
+# Exemple de labels Traefik à ajouter SOUS le service linkdup (même niveau que build:, ports:, etc.)
+# Remplacer TON_SOUS_DOMAINE et mytlschallenge par les valeurs de ton stack (voir service n8n existant).
+#
+#     labels:
+#       traefik.enable: "true"
+#       traefik.http.routers.linkdup.rule: Host(`linkdup.TON_DOMAINE`)
+#       traefik.http.routers.linkdup.entrypoints: web,websecure
+#       traefik.http.routers.linkdup.tls: "true"
+#       traefik.http.routers.linkdup.tls.certresolver: mytlschallenge
+#       traefik.http.services.linkdup.loadbalancer.server.port: "3000"
+#
+# Si Traefik n’écoute que le réseau Docker, assure-toi que le service linkdup est sur le même network que traefik.
+# Alternative sans labels : Nginx sur l’hôte vers 127.0.0.1:3001 (voir CURSOR-BRIEF-VPS.md).

@@ -1,0 +1,23 @@
+# Référence manuelle : ne pas lancer docker compose sur ce fichier tel quel.
+# Copier chaque fragment dans /root/docker-compose.yml comme indiqué dans docs/VPS-HOSTINGER.md
+
+---
+# --- FRAGMENT 1 : à placer sous services: ---
+linkdup:
+  build: /root/linkdup
+  container_name: root-linkdup-1
+  restart: unless-stopped
+  ports:
+    - "127.0.0.1:3001:3000"
+  volumes:
+    - linkdup_data:/app/data
+  env_file:
+    - /root/linkdup/.env.production
+  environment:
+    - NODE_ENV=production
+    - USE_ENV_CREDENTIALS=true
+
+---
+# --- FRAGMENT 2 : à placer sous volumes: (racine) ---
+linkdup_data:
+  driver: local
