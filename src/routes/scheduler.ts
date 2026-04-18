@@ -118,7 +118,7 @@ schedulerRouter.post("/run-scheduled", async (req, res) => {
         `UPDATE posts SET
            linkedin_post_id  = ?,
            linkedin_post_url = ?,
-           status            = 'Publie',
+           status            = 'Publié',
            publish_error     = NULL
          WHERE id = ?`
       ).run(result.postId, result.postUrl, postId);

@@ -51,7 +51,13 @@ export function PostsList() {
 
   useEffect(() => {
     if (statusFilter) {
-      setFilteredPosts(posts.filter((p) => p.status === statusFilter));
+      // Handle both "Publié" (with accent) and "Publie" (legacy, no accent)
+      const isPublishedFilter = statusFilter === "Publié" || statusFilter === "Publie";
+      setFilteredPosts(posts.filter((p) =>
+        isPublishedFilter
+          ? p.status === "Publié" || p.status === "Publie"
+          : p.status === statusFilter
+      ));
     } else {
       setFilteredPosts(posts);
     }
@@ -98,8 +104,8 @@ export function PostsList() {
             : "No posts yet. Create your first one!"}
         </p>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="w-12 px-3 py-3" />
@@ -138,7 +144,7 @@ export function PostsList() {
                     {post.publication_date
                       ? new Date(
                           post.publication_date.replace(" ", "T") + "Z"
-                        ).toLocaleDateString("fr-FR")
+                        ).toLocaleDateString("en-GB")
                       : post.created_at.split(" ")[0]}
                   </td>
                 </tr>

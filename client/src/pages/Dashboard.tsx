@@ -44,7 +44,7 @@ function formatDate(
     const iso = dateStr.replace(" ", "T");
     const withZ = iso.endsWith("Z") ? iso : iso + "Z";
     const finalOpts = timezone ? { ...opts, timeZone: timezone } : opts;
-    return new Date(withZ).toLocaleString("fr-FR", finalOpts);
+    return new Date(withZ).toLocaleString("en-GB", finalOpts);
   } catch {
     return dateStr;
   }
@@ -103,14 +103,14 @@ function LinkedInPostPreview({
               className="text-xs text-gray-500 hover:text-gray-700 mt-1 font-medium"
               onClick={() => setExpanded((v) => !v)}
             >
-              {expanded ? "…voir moins" : "…voir plus"}
+              {expanded ? "…see less" : "…see more"}
             </button>
           )}
         </div>
       ) : (
         <div className="px-4 pb-3">
           <p className="text-sm text-gray-400 italic">
-            (Aucun contenu — sélectionne ou écris la version finale dans ce post)
+            (No content — select or write the final version in this post)
           </p>
         </div>
       )}
@@ -138,6 +138,64 @@ function LinkedInPostPreview({
             </button>
           )
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Published post card (grid) ───────────────────────────────────────────────
+
+function PublishedPostCard({
+  post,
+  onClick,
+  timezone,
+}: {
+  post: Post;
+  onClick: () => void;
+  timezone: string;
+}) {
+  const text = getPostText(post);
+  const imageUrl = getFirstImageUrl(post);
+
+  return (
+    <div
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md hover:border-green-300 transition-all group"
+      onClick={onClick}
+    >
+      {imageUrl ? (
+        <div className="w-full h-32 overflow-hidden bg-gray-100">
+          <img
+            src={imageUrl}
+            alt={post.subject || ""}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        </div>
+      ) : (
+        <div className="w-full h-16 bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center border-b border-gray-100">
+          <span className="text-2xl opacity-60">✅</span>
+        </div>
+      )}
+      <div className="p-3">
+        <p className="font-semibold text-sm text-gray-900 truncate mb-1">
+          {post.subject || "(untitled)"}
+        </p>
+        <p className="text-xs text-green-600 font-medium mb-2 flex items-center gap-1">
+          <span>✅</span>
+          {formatDate(post.publication_date, {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          }, timezone)}
+        </p>
+        {text && (
+          <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{text}</p>
+        )}
+      </div>
+      <div className="px-3 pb-3">
+        <span className="text-xs text-green-700 font-medium group-hover:underline">
+          View preview →
+        </span>
       </div>
     </div>
   );
@@ -180,7 +238,7 @@ function ScheduledPostCard({
       {/* Content */}
       <div className="p-3">
         <p className="font-semibold text-sm text-gray-900 truncate mb-1">
-          {post.subject || "(sans titre)"}
+          {post.subject || "(untitled)"}
         </p>
         <p className="text-xs text-teal-600 font-medium mb-2 flex items-center gap-1">
           <span>🗓</span>
@@ -196,13 +254,13 @@ function ScheduledPostCard({
             {text}
           </p>
         ) : (
-          <p className="text-xs text-gray-400 italic">Contenu non rédigé</p>
+          <p className="text-xs text-gray-400 italic">No content written</p>
         )}
       </div>
 
       <div className="px-3 pb-3">
         <span className="text-xs text-teal-700 font-medium group-hover:underline">
-          Éditer →
+          Edit →
         </span>
       </div>
     </div>
@@ -249,14 +307,25 @@ export function Dashboard() {
     })();
   }, []);
 
+  const publishedPosts = posts
+    .filter((p) => p.status === "Publié" || p.status === "Publie")
+    .sort((a, b) => {
+      const dateA = a.publication_date || a.created_at;
+      const dateB = b.publication_date || b.created_at;
+      return dateB.localeCompare(dateA);
+    });
+  const lastThreePublished = publishedPosts.slice(0, 3);
+  const pipelineCount = posts.filter((p) => p.status !== "Publié" && p.status !== "Publie").length;
+
   const cards = [
-    { label: "Posts", count: posts.length, href: "/posts", color: "text-blue-600" },
+    { label: "In Pipeline", count: pipelineCount, href: "/posts", color: "text-blue-600" },
+    { label: "Published", count: publishedPosts.length, href: "/posts?status=Publi%C3%A9", color: "text-green-600" },
     { label: "Styles", count: styles.length, href: "/styles", color: "text-purple-600" },
     { label: "Templates", count: templates.length, href: "/templates", color: "text-orange-600" },
-    { label: "Contenus", count: contenus.length, href: "/contenus", color: "text-green-600" },
+    { label: "Contenus", count: contenus.length, href: "/contenus", color: "text-teal-600" },
   ];
 
-  const published = posts.filter((p) => p.status === "Publié" || p.status === "Publie").length;
+  const published = publishedPosts.length;
   const drafts = posts.filter((p) => p.status === "Brouillon").length;
 
   // Scheduled posts sorted by publication_date ascending — exclut ceux sans date
@@ -287,7 +356,7 @@ export function Dashboard() {
       <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
 
       {/* ── Summary cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {cards.map(({ label, count, href, color }) => (
           <a
             key={label}
@@ -320,7 +389,7 @@ export function Dashboard() {
               {scheduled} scheduled
               {scheduled > 0 && (
                 <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-medium">
-                  aperçu
+                  preview
                 </span>
               )}
             </button>
@@ -346,20 +415,49 @@ export function Dashboard() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-gray-700">
-              Prochains posts programmés
+              Upcoming Scheduled Posts
             </h3>
             {scheduledPosts.length > 3 && (
               <button
                 onClick={() => navigate("/posts?status=Programmé")}
                 className="text-xs text-teal-600 hover:text-teal-800 hover:underline"
               >
-                Voir tous ({scheduledPosts.length}) →
+                View all ({scheduledPosts.length}) →
               </button>
             )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {nextThree.map((post) => (
               <ScheduledPostCard
+                key={post.id}
+                post={post}
+                timezone={timezone}
+                onClick={() => navigate(`/posts/${post.id}`)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Grid : 3 derniers posts publiés ───────────────────────────────── */}
+      {lastThreePublished.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-700">
+              Recently Published
+            </h3>
+            {publishedPosts.length > 3 && (
+              <button
+                onClick={() => navigate("/posts?status=Publié")}
+                className="text-xs text-green-600 hover:text-green-800 hover:underline"
+              >
+                View all ({publishedPosts.length}) →
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {lastThreePublished.map((post) => (
+              <PublishedPostCard
                 key={post.id}
                 post={post}
                 timezone={timezone}
@@ -384,10 +482,10 @@ export function Dashboard() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 sticky top-0 bg-gray-50 z-10 rounded-t-2xl">
               <div>
                 <h3 className="font-semibold text-gray-900">
-                  Aperçu LinkedIn
+                  LinkedIn Preview
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Comme si c'était publié
+                  As it would appear on LinkedIn
                 </p>
               </div>
 
@@ -433,7 +531,7 @@ export function Dashboard() {
 
               {/* Subject label */}
               <p className="mt-3 text-xs text-gray-400 text-center truncate px-2">
-                {scheduledPosts[previewIndex].subject || "(sans titre)"}
+                {scheduledPosts[previewIndex].subject || "(untitled)"}
               </p>
 
               {/* Action buttons */}
@@ -442,7 +540,7 @@ export function Dashboard() {
                   onClick={closePreview}
                   className="text-xs text-gray-400 hover:text-gray-600"
                 >
-                  Fermer
+                  Close
                 </button>
                 <button
                   onClick={() => {
@@ -451,7 +549,7 @@ export function Dashboard() {
                   }}
                   className="text-sm text-white bg-[#0A66C2] hover:bg-[#004182] px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  Éditer ce post →
+                  Edit this post →
                 </button>
               </div>
             </div>

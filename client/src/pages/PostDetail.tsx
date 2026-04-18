@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { usePostsStore, type Post } from "../stores/posts";
 import { useStylesStore } from "../stores/styles";
@@ -50,14 +50,14 @@ function LinkedInMiniPreview({
   if (!imageUrl) return null;
 
   const dateStr = post.publication_date
-    ? new Intl.DateTimeFormat("fr-FR", {
+    ? new Intl.DateTimeFormat("en-GB", {
         timeZone: timezone,
         day: "numeric",
         month: "short",
         hour: "2-digit",
         minute: "2-digit",
       }).format(new Date(post.publication_date.replace(" ", "T") + "Z"))
-    : "Non programmé";
+    : "Not scheduled";
 
   const PreviewCard = ({ compact }: { compact: boolean }) => (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -80,7 +80,7 @@ function LinkedInMiniPreview({
       {/* Image */}
       <img
         src={imageUrl}
-        alt="Aperçu media"
+        alt="Media preview"
         className={`w-full object-cover ${compact ? "max-h-40" : "max-h-[60vh]"}`}
         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
       />
@@ -99,12 +99,12 @@ function LinkedInMiniPreview({
     <>
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-medium text-gray-700">Aperçu LinkedIn</label>
+          <label className="text-sm font-medium text-gray-700">LinkedIn Preview</label>
           <button
             onClick={() => setModalOpen(true)}
             className="text-xs text-[#0A66C2] hover:underline font-medium"
           >
-            Voir en grand →
+            Expand →
           </button>
         </div>
         <div
@@ -128,8 +128,8 @@ function LinkedInMiniPreview({
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 sticky top-0 bg-gray-50 rounded-t-2xl z-10">
               <div>
-                <h3 className="font-semibold text-gray-900">Aperçu LinkedIn</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Comme si c'était publié</p>
+                <h3 className="font-semibold text-gray-900">LinkedIn Preview</h3>
+                <p className="text-xs text-gray-500 mt-0.5">As it would appear on LinkedIn</p>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
@@ -266,6 +266,8 @@ export function PostDetail() {
   const [timezone, setTimezone] = useState("Asia/Bangkok");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [isEditMode, setIsEditMode] = useState(true);
+  const editModeInitRef = useRef(false);
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -295,12 +297,22 @@ export function PostDetail() {
 
   useEffect(() => {
     const found = posts.find((p) => p.id === Number(id));
-    if (found) setPost({ ...found });
+    if (found) {
+      setPost({ ...found });
+      if (!editModeInitRef.current) {
+        editModeInitRef.current = true;
+        const alreadyPublished =
+          !!found.linkedin_post_url?.trim() && PUBLISHED_STATUSES.has(found.status);
+        if (alreadyPublished) setIsEditMode(false);
+      }
+    }
   }, [posts, id]);
 
   useEffect(() => {
     setPubDateDirty(false);
     setConfirmDelete(false);
+    editModeInitRef.current = false;
+    setIsEditMode(true);
   }, [id]);
 
   useEffect(() => {
@@ -342,7 +354,7 @@ export function PostDetail() {
       setPost(updated);
       setPubDateDirty(false);
       setPublicationDateDraft(updated.publication_date?.replace(" ", "T").slice(0, 16) ?? "");
-      showToast("Date programmée enregistrée \u2713");
+      showToast("Scheduled date saved \u2713");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setSaveError(msg);
@@ -457,13 +469,138 @@ export function PostDetail() {
     try {
       const updated = await optimize(post.id);
       setPost(updated);
-      showToast("Post optimisé et sauvegardé \u2713");
+      showToast("Post optimized and saved \u2713");
     } catch (err: unknown) {
       setAiError(err instanceof Error ? err.message : String(err));
     } finally {
       setOptimizing(false);
     }
   };
+
+  // ── Vue lecture seule pour les posts publiés ─────────────────────────────
+  if (isActuallyPublished && !isEditMode) {
+    const viewText = (() => {
+      if (post.final_version?.trim()) return post.final_version.trim();
+      const sel = post.selected_version?.trim().toUpperCase();
+      if (sel === "V1" && post.v1?.trim()) return post.v1.trim();
+      if (sel === "V2" && post.v2?.trim()) return post.v2.trim();
+      if (sel === "V3" && post.v3?.trim()) return post.v3.trim();
+      return "";
+    })();
+    const viewImage = mediaRows[0]
+      ? mediaRows[0].kind === "url"
+        ? mediaRows[0].ref.trim()
+        : apiUrl(`/${mediaRows[0].ref.trim().replace(/^\/+/, "")}`)
+      : null;
+
+    return (
+      <div className="max-w-2xl">
+        {toast && (
+          <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 ${
+            toast.type === "success" ? "bg-green-50 border border-green-200 text-green-800" : "bg-red-50 border border-red-200 text-red-800"
+          }`}>
+            <span>{toast.type === "success" ? "✅" : "❌"}</span>
+            {toast.message}
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <button onClick={() => navigate("/posts")} className="text-gray-400 hover:text-gray-600">
+            &larr; Posts
+          </button>
+          <div className="flex items-center gap-2">
+            {confirmDelete ? (
+              <>
+                <span className="text-xs text-red-600 font-medium">Confirm deletion?</span>
+                <button onClick={() => void handleDelete()} className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">
+                  Yes, delete
+                </button>
+                <button onClick={() => setConfirmDelete(false)} className="text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setIsEditMode(true)}
+                  className="text-sm px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 font-medium"
+                >
+                  ✏️ Éditer
+                </button>
+                <button onClick={() => void handleDelete()} className="text-red-500 text-sm hover:text-red-700">
+                  Supprimer
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Titre + badge Publié */}
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          <h2 className="text-2xl font-bold">{post.subject || "(sans titre)"}</h2>
+          <span className="inline-flex items-center gap-1.5 text-sm text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full font-medium">
+            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+            Published on LinkedIn
+          </span>
+        </div>
+
+        {/* Aperçu LinkedIn pleine largeur */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+          <div className="flex items-start gap-3 p-4 pb-3">
+            <div className="w-12 h-12 rounded-full bg-[#0A66C2] flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+              {authorName.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm text-gray-900">{authorName}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                🗓{" "}
+                {post.publication_date
+                  ? new Intl.DateTimeFormat("en-GB", {
+                      timeZone: timezone,
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(new Date(post.publication_date.replace(" ", "T") + "Z"))
+                  : "—"}{" "}
+                · 🌐
+              </p>
+            </div>
+          </div>
+          {viewText && (
+            <div className="px-4 pb-3">
+              <p className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">{viewText}</p>
+            </div>
+          )}
+          {viewImage && (
+            <img
+              src={viewImage}
+              alt="Post media"
+              className="w-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="px-4 py-2 border-t border-gray-100 flex">
+            {["👍 Like", "💬 Comment", "↩ Repost", "✉ Send"].map((l) => (
+              <span key={l} className="flex-1 text-xs text-gray-400 text-center py-1">{l}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Lien LinkedIn */}
+        <a
+          href={linkedinPostHref(post.linkedin_post_url!)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-sm text-[#0A66C2] hover:text-[#004182] font-medium hover:underline"
+        >
+          View post on LinkedIn →
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl">
@@ -486,6 +623,14 @@ export function PostDetail() {
           <button onClick={() => navigate("/posts")} className="text-gray-400 hover:text-gray-600">
             &larr; Posts
           </button>
+          {isActuallyPublished && (
+            <button
+              onClick={() => setIsEditMode(false)}
+              className="text-sm text-[#0A66C2] hover:underline"
+            >
+              ← Published view
+            </button>
+          )}
           <h2 className="text-2xl font-bold">{post.subject || "(untitled)"}</h2>
         </div>
         <div className="flex items-center gap-2">
@@ -497,20 +642,20 @@ export function PostDetail() {
           )}
           {confirmDelete ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-red-600 font-medium">Confirmer la suppression ?</span>
+              <span className="text-xs text-red-600 font-medium">Confirm deletion?</span>
               <button
                 type="button"
                 onClick={() => void handleDelete()}
                 className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
               >
-                Oui, supprimer
+                Yes, delete
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
                 className="text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Annuler
+                Cancel
               </button>
             </div>
           ) : (
@@ -525,9 +670,9 @@ export function PostDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left column — Post config */}
-        <div className="col-span-1 space-y-4">
+        <div className="md:col-span-1 space-y-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Subject</label>
@@ -736,7 +881,7 @@ export function PostDetail() {
         </div>
 
         {/* Right column — Versions + Final */}
-        <div className="col-span-2 space-y-4">
+        <div className="md:col-span-2 space-y-4">
           {/* AI error banner */}
           {aiError && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between items-center">
@@ -836,14 +981,14 @@ export function PostDetail() {
 
           {/* Optimization */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <label className="block text-sm font-medium mb-2">Instructions d&apos;optimisation</label>
+            <label className="block text-sm font-medium mb-2">Optimization instructions</label>
             <textarea
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
               rows={2}
               value={post.optimization_instructions || ""}
               onChange={(e) => setPost({ ...post, optimization_instructions: e.target.value })}
               onBlur={(e) => save({ optimization_instructions: e.target.value })}
-              placeholder="ex. Raccourcis le post, ajoute plus d'emojis, change le CTA..."
+              placeholder="e.g. Shorten the post, add more emojis, change the CTA..."
             />
             <button
               type="button"
@@ -891,7 +1036,7 @@ export function PostDetail() {
                 }
                 className="text-xs text-gray-500 hover:text-red-600 underline"
               >
-                Réinitialiser et republier
+                Reset and republish
               </button>
             </div>
           ) : (

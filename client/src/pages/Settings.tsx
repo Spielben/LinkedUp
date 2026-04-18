@@ -282,7 +282,7 @@ export function Settings() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
           <p className="text-xs text-gray-500 mb-2">
-            Utilisé pour afficher les dates de publication dans la bonne heure locale.
+            Used to display publication dates in your local time.
           </p>
           <select
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
