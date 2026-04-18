@@ -57,6 +57,13 @@ function runMigrations(database: Database.Database): void {
     // Column already exists, ignore
   }
 
+  // Migration: JSON blob for LinkedIn OAuth tokens when USE_ENV_CREDENTIALS=true (VPS)
+  try {
+    database.exec("ALTER TABLE settings ADD COLUMN linkedin_tokens TEXT");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   // Migration: Create linkedin_posts table
   try {
     database.exec(`
