@@ -12,6 +12,7 @@ import { seedRouter } from "./routes/seed.js";
 import { importRouter } from "./routes/import.js";
 import { linkedinPostsRouter } from "./routes/linkedin-posts.js";
 import { linkedinAuthRouter } from "./routes/linkedin-auth.js";
+import { schedulerRouter } from "./routes/scheduler.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -61,6 +62,8 @@ export function createServer(port = 3000) {
   app.use("/api/import", importRouter);
   app.use("/api/linkedin-posts", linkedinPostsRouter);
   app.use("/api/linkedin", linkedinAuthRouter);
+  // Internal scheduler endpoint — authenticated by x-internal-token header, never public
+  app.use("/api/internal", schedulerRouter);
 
   // Unmatched /api/* → JSON 404 (never return SPA index.html for API paths)
   app.use((req, res, next) => {
