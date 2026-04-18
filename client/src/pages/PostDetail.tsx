@@ -26,6 +26,8 @@ function LinkedInMiniPreview({
   mediaRows: MediaRow[];
   authorName: string;
 }) {
+  const [modalOpen, setModalOpen] = useState(false);
+
   const text = (() => {
     if (post.final_version?.trim()) return post.final_version.trim();
     const sel = post.selected_version?.trim().toUpperCase();
@@ -45,62 +47,101 @@ function LinkedInMiniPreview({
 
   if (!imageUrl) return null;
 
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <label className="block text-sm font-medium mb-3 text-gray-700">
-        Aperçu LinkedIn
-      </label>
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-2 p-3 pb-2">
-          <div className="w-8 h-8 rounded-full bg-[#0A66C2] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-            {authorName.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <p className="font-semibold text-xs text-gray-900">{authorName}</p>
-            <p className="text-[10px] text-gray-400">
-              {post.publication_date
-                ? new Date(
-                    post.publication_date.replace(" ", "T")
-                  ).toLocaleString("fr-FR", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : "Non programmé"}{" "}
-              • 🌐
-            </p>
-          </div>
+  const dateStr = post.publication_date
+    ? new Date(post.publication_date.replace(" ", "T")).toLocaleString("fr-FR", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Non programmé";
+
+  const PreviewCard = ({ compact }: { compact: boolean }) => (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 p-3 pb-2">
+        <div className="w-8 h-8 rounded-full bg-[#0A66C2] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+          {authorName.charAt(0).toUpperCase()}
         </div>
-        {/* Texte */}
-        {text && (
-          <p className="px-3 pb-2 text-xs text-gray-700 line-clamp-4 whitespace-pre-line leading-relaxed">
-            {text}
-          </p>
-        )}
-        {/* Image */}
-        <img
-          src={imageUrl}
-          alt="Aperçu media"
-          className="w-full object-cover max-h-52"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
-        {/* Barre d'engagement décorative */}
-        <div className="px-3 py-1.5 border-t border-gray-100 flex gap-1">
-          {["👍 Like", "💬 Comment", "↩ Repost", "✉ Send"].map((label) => (
-            <span
-              key={label}
-              className="flex-1 text-[10px] text-gray-400 text-center py-1"
-            >
-              {label}
-            </span>
-          ))}
+        <div>
+          <p className="font-semibold text-xs text-gray-900">{authorName}</p>
+          <p className="text-[10px] text-gray-400">{dateStr} • 🌐</p>
         </div>
       </div>
+      {/* Texte */}
+      {text && (
+        <p className={`px-3 pb-2 text-xs text-gray-700 whitespace-pre-line leading-relaxed ${compact ? "line-clamp-3" : ""}`}>
+          {text}
+        </p>
+      )}
+      {/* Image */}
+      <img
+        src={imageUrl}
+        alt="Aperçu media"
+        className={`w-full object-cover ${compact ? "max-h-40" : "max-h-[60vh]"}`}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+      />
+      {/* Barre d'engagement */}
+      <div className="px-3 py-1.5 border-t border-gray-100 flex gap-1">
+        {["👍 Like", "💬 Comment", "↩ Repost", "✉ Send"].map((label) => (
+          <span key={label} className="flex-1 text-[10px] text-gray-400 text-center py-1">
+            {label}
+          </span>
+        ))}
+      </div>
     </div>
+  );
+
+  return (
+    <>
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-medium text-gray-700">Aperçu LinkedIn</label>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="text-xs text-[#0A66C2] hover:underline font-medium"
+          >
+            Voir en grand →
+          </button>
+        </div>
+        <div
+          className="cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => setModalOpen(true)}
+          title="Cliquer pour voir en grand"
+        >
+          <PreviewCard compact={true} />
+        </div>
+      </div>
+
+      {/* Modal plein écran */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="bg-gray-50 rounded-2xl w-full max-w-lg max-h-[94vh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 sticky top-0 bg-gray-50 rounded-t-2xl z-10">
+              <div>
+                <h3 className="font-semibold text-gray-900">Aperçu LinkedIn</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Comme si c'était publié</p>
+              </div>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors text-lg"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5">
+              <PreviewCard compact={false} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
