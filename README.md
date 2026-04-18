@@ -59,6 +59,10 @@ npm test   # passes even when no test files exist yet
 - **[RELEASING.md](RELEASING.md)** — tag + publish a **GitHub Release**.
 - **Releases:** https://github.com/Spielben/LinkedUp/releases
 
+## Documentation
+
+- **[docs/README.md](docs/README.md)** — index: self-hosted / VPS runbook and architecture, security, contributing, optional feature briefs.
+
 ## Open source checklist
 
 1. Create an empty **public** repository on GitHub (no README/license there if you already have them locally).

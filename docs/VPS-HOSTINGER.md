@@ -1,17 +1,21 @@
-# Déploiement VPS Hostinger (terminal web) — sans répétition
+# Déploiement VPS Hostinger — guide opérationnel
 
-Ce document matérialise le plan d’exécution : commandes à lancer **sur le serveur uniquement**. Aucun accès distant possible depuis Cursor : tout se fait dans le **terminal Hostinger**.
+Runbook **sans données sensibles** : commandes à exécuter sur le serveur (terminal Hostinger, SSH ou SFTP). Pour le contexte produit (credentials env, n8n, alternatives Nginx), voir [CURSOR-BRIEF-VPS.md](../CURSOR-BRIEF-VPS.md).
 
-## Limites
-
-- Les secrets restent dans `/root/linkdup/.env.production` (permissions `600`).
-- **Ne jamais** coller dans un chat : contenu de `.env`, sortie complète de `docker compose config`, ni logs contenant des tokens.
+**Suivi de projet (équipe)** : [Linear — projet Linkdup](https://linear.app/linkdup/project/linkdup-3ffcb4effe77/overview) (lien interne ; ne pas y coller de secrets).
 
 ---
 
-## 1. Vérifier l’état (ne rien refaire si déjà OK)
+## Limites et sécurité
 
-À exécuter dans le terminal Hostinger :
+- Secrets uniquement dans `/root/linkdup/.env.production` (fichier hors dépôt, `chmod 600`).
+- **Ne jamais** coller dans un chat ou une issue : contenu de `.env`, sortie complète de `docker compose config`, logs avec tokens.
+- Partage de `docker-compose.yml` pour support / IA : copier **uniquement** les services concernés (`traefik`, `linkdup`) ou redacter les valeurs (`REDACTED`). Le fichier racine peut contenir des clés d’autres services (ex. chiffrement d’outils tiers).
+- Exposition accidentelle d’une clé : traiter comme **incident** ; rotation selon la doc du produit concerné (sans republier la clé).
+
+---
+
+## 1. Vérifier l’état
 
 ```bash
 pwd
@@ -19,13 +23,13 @@ ls -la /root/linkdup
 docker compose -f /root/docker-compose.yml ps
 ```
 
-- Si `/root/linkdup` existe et le dépôt est présent : **ne pas** refaire `git clone`.
-- Si `root-linkdup-1` est **Up** : ne pas relancer `up --build` sans raison (sauf après changement de config ou de code).
-- Si `.env.production` existe déjà (`ls -la /root/linkdup/.env.production`) : **ne pas** refaire `cp` depuis l’exemple.
+- Dépôt déjà présent sous `/root/linkdup` : ne pas refaire `git clone` sans raison.
+- Conteneur Linkdup **Up** : ne pas relancer `up --build` sans changement de code ou de config.
+- `.env.production` déjà présent : ne pas l’écraser avec l’exemple.
 
 ---
 
-## 2. Fichier d’environnement (une fois, ou mise à jour)
+## 2. Fichier d’environnement
 
 ```bash
 cd /root/linkdup
@@ -34,22 +38,19 @@ nano .env.production
 chmod 600 .env.production
 ```
 
-Remplir les variables sur le serveur uniquement (tableaux de bord OpenRouter, LinkedIn, Apify dans un autre onglet).
+Renseigner les clés (tableaux de bord des fournisseurs, hors terminal). **`LINKEDIN_REDIRECT_URI`** doit correspondre **exactement** à l’URL autorisée dans l’app LinkedIn Developers (HTTPS + chemin `/api/linkedin/callback`). Voir `.env.production.example` dans le dépôt.
 
 ---
 
-## 3. Compléter `docker-compose.yml` si le service linkdup est incomplet
+## 3. Service `linkdup` dans Compose
 
 Fichier : `/root/docker-compose.yml`.
 
-Fragment complet à fusionner : voir [deploy/hostinger-linkdup.compose.snippet.yaml](../deploy/hostinger-linkdup.compose.snippet.yaml).
+Fragments de référence (à fusionner manuellement) :
 
-Points obligatoires :
+- [deploy/hostinger-linkdup.compose.snippet.yaml](../deploy/hostinger-linkdup.compose.snippet.yaml)
 
-- Sous `services:` : bloc `linkdup` avec `build`, `ports`, `volumes` (`linkdup_data:/app/data`), `env_file`, `environment`.
-- Sous `volumes:` : `linkdup_data` avec `driver: local` (sauf si tu utilises un volume `external` déjà créé — adapte alors).
-
-Édition :
+Inclure au minimum : `build`, `ports` (ex. `127.0.0.1:3001:3000`), `volumes` (`linkdup_data:/app/data`), `env_file`, `environment`.
 
 ```bash
 cd /root
@@ -58,56 +59,100 @@ nano docker-compose.yml
 
 ---
 
-## 4. Valider la syntaxe **sans afficher les secrets**
+## 4. Valider le YAML sans fuiter les secrets
 
 ```bash
 docker compose -f /root/docker-compose.yml config > /dev/null && echo OK
 ```
 
-Si tu vois `OK`, le YAML est valide. **N’utilise pas** `docker compose config` sans redirection si tu dois copier le résultat : la sortie complète peut contenir des variables d’environnement résolues (autres services inclus).
+Ne pas copier-coller la sortie de `docker compose config` sans redirection si d’autres services injectent des variables sensibles.
 
 ---
 
-## 5. Construire et démarrer Linkdup
+## 5. Build et démarrage
 
 ```bash
 cd /root
 docker compose up -d --build linkdup
-```
-
-Vérification locale sur le serveur (sans coller les logs ailleurs si des secrets apparaissent) :
-
-```bash
 docker compose -f /root/docker-compose.yml ps
 docker logs root-linkdup-1 --tail 30
 ```
 
+Adapter le nom du conteneur si `docker ps` affiche un autre identifiant.
+
 ---
 
-## 6. HTTPS et nom de domaine — deux options
+## 6. HTTPS et domaine
 
-### Option A — Traefik (cohérent si n8n passe déjà par Traefik)
+### Option A — Traefik (recommandé si le stack utilise déjà Traefik)
 
-Ajouter des **labels** sur le service `linkdup` pour un sous-domaine dédié. Fragment d’exemple (à adapter : host, cert resolver) : [deploy/hostinger-linkdup.traefik.snippet.yaml](../deploy/hostinger-linkdup.traefik.snippet.yaml).
+Labels sur le service `linkdup` : [deploy/hostinger-linkdup.traefik.snippet.yaml](../deploy/hostinger-linkdup.traefik.snippet.yaml).
 
 Après modification :
 
 ```bash
 cd /root
-docker compose up -d --build linkdup
+docker compose up -d --force-recreate traefik linkdup
 ```
+
+**Basic Auth (optionnel)** : si un middleware `basicauth` avec `usersfile` pointe vers un chemin **dans le conteneur Traefik**, le fichier `.htpasswd` doit être **monté en volume sur le service `traefik`**, pas seulement sur `linkdup`. Sinon Traefik journalise une erreur du type *no such file or directory* pour ce chemin.
 
 ### Option B — Nginx sur l’hôte
 
-Suivre la section Nginx du brief projet (`CURSOR-BRIEF-VPS.md`) : proxy vers `127.0.0.1:3001`, Certbot pour TLS.
+Reverse proxy TLS vers `127.0.0.1:3001` (Certbot, etc.). Esquisse dans [CURSOR-BRIEF-VPS.md](../CURSOR-BRIEF-VPS.md).
 
 ### DNS et LinkedIn
 
-- **DNS Hostinger** : enregistrement **A** du sous-domaine vers l’IP du VPS.
-- **LinkedIn Developers** : URL de callback **HTTPS** `https://TON_SOUS_DOMAINE/api/linkedin/callback`.
+- Enregistrement **A** du sous-domaine vers l’**IPv4 du VPS** (chez le registrar / DNS du domaine).
+- Application LinkedIn : URL de redirection HTTPS alignée avec `LINKEDIN_REDIRECT_URI`.
 
 ---
 
-## 7. n8n (scheduler)
+## 7. n8n (planification)
 
-Aucun code supplémentaire dans le dépôt : workflow n8n comme décrit dans le brief (HTTP vers l’API Linkdup sur le réseau Docker). Vérifier le nom du conteneur et le port internes (`root-linkdup-1:3000` si le service expose 3000 dans le réseau compose).
+Aucun scheduler dans le code Node : un workflow n8n peut interroger l’API Linkdup sur le réseau Docker (ex. `http://<nom-conteneur-linkdup>:3000`). Détail des nœuds dans [CURSOR-BRIEF-VPS.md](../CURSOR-BRIEF-VPS.md).
+
+---
+
+## 8. Importer les données (`data/`)
+
+Pour remplacer le contenu du volume **sans fusion** (ex. première mise en production avec une copie issue d’un autre environnement) :
+
+1. Sur la machine source : arrêter l’app, puis créer une archive du dossier `data/` uniquement :
+
+   ```bash
+   sqlite3 data/linkdup.db "PRAGMA wal_checkpoint(FULL);" 2>/dev/null || true
+   tar czf linkdup-data.tar.gz -C data .
+   ```
+
+2. Transférer `linkdup-data.tar.gz` vers le VPS (SFTP, `scp`, etc.) sous un chemin connu (ex. `/root/`).
+
+3. Sur le VPS : arrêter Linkdup, vider le volume, extraire, redémarrer :
+
+   ```bash
+   docker volume ls   # repérer le nom du volume (ex. root_linkdup_data)
+   docker compose -f /root/docker-compose.yml stop linkdup
+
+   docker run --rm \
+     -v NOM_DU_VOLUME:/data \
+     -v /root:/backup \
+     alpine sh -c 'rm -rf /data/* && tar xzf /backup/linkdup-data.tar.gz -C /data'
+
+   docker compose -f /root/docker-compose.yml start linkdup
+   rm -f /root/linkdup-data.tar.gz
+   ```
+
+Données concernées : `linkdup.db`, `images/`, `contenus/`, etc. Après import, vérifier la connexion LinkedIn OAuth si les tokens de l’ancien environnement ne sont pas valides sur ce domaine.
+
+---
+
+## 9. Sauvegarde ponctuelle du volume
+
+```bash
+docker run --rm \
+  -v NOM_DU_VOLUME:/data \
+  -v /root/backups:/backup \
+  alpine tar czf /backup/linkdup-data-$(date +%Y%m%d).tar.gz -C /data .
+```
+
+Créer `/root/backups` si besoin. Stocker les archives hors du serveur selon votre politique de rétention.
