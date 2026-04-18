@@ -48,11 +48,12 @@ export function PostsList() {
   }, []);
 
   useEffect(() => {
-    if (statusFilter) {
-      // Handle both "Publié" (with accent) and "Publie" (legacy, no accent)
-      setFilteredPosts(posts.filter((p) => p.status === statusFilter));
+    // Published posts live in the LinkedIn tab — never show them in the pipeline
+    const pipeline = posts.filter((p) => p.status !== "Published");
+    if (statusFilter && statusFilter !== "Published") {
+      setFilteredPosts(pipeline.filter((p) => p.status === statusFilter));
     } else {
-      setFilteredPosts(posts);
+      setFilteredPosts(pipeline);
     }
   }, [posts, statusFilter]);
 

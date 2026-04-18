@@ -1,8 +1,96 @@
 import { useEffect, useRef, useState } from "react";
 import { useLinkedInPostsStore } from "../stores/linkedin-posts";
+import { usePostsStore, type Post } from "../stores/posts";
+import { apiUrl } from "../lib/api";
+import { mediaRowsFromPost } from "../lib/post-media";
+
+function getPublishedText(post: Post): string {
+  if (post.final_version?.trim()) return post.final_version.trim();
+  const sel = post.selected_version?.trim().toUpperCase();
+  if (sel === "V1" && post.v1?.trim()) return post.v1.trim();
+  if (sel === "V2" && post.v2?.trim()) return post.v2.trim();
+  if (sel === "V3" && post.v3?.trim()) return post.v3.trim();
+  return "";
+}
+
+function getPublishedImage(post: Post): string | null {
+  const rows = mediaRowsFromPost(post);
+  if (!rows[0]) return null;
+  const r = rows[0];
+  return r.kind === "url" ? r.ref.trim() || null : apiUrl(`/${r.ref.trim().replace(/^\/+/, "")}`);
+}
+
+function LinkdupPostCard({ post }: { post: Post }) {
+  const [expanded, setExpanded] = useState(false);
+  const text = getPublishedText(post);
+  const imageUrl = getPublishedImage(post);
+  const dateStr = post.publication_date
+    ? new Date(post.publication_date.replace(" ", "T") + "Z").toLocaleDateString("en-GB", {
+        day: "numeric", month: "short", year: "numeric",
+      })
+    : null;
+
+  return (
+    <div
+      className="bg-white rounded-lg border border-green-200 overflow-hidden cursor-pointer hover:border-green-400 hover:shadow-sm transition"
+      onClick={() => setExpanded((v) => !v)}
+    >
+      {imageUrl && (
+        <img
+          src={imageUrl}
+          alt={post.subject || ""}
+          className="w-full h-36 sm:h-40 object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
+      <div className="p-3 sm:p-4">
+        {post.subject && (
+          <h3 className="font-medium text-sm line-clamp-2 mb-1">{post.subject}</h3>
+        )}
+        {text ? (
+          <p className="text-sm text-gray-700 leading-relaxed line-clamp-5 whitespace-pre-line break-words">
+            {text}
+          </p>
+        ) : (
+          <p className="text-xs text-gray-400 italic">No content</p>
+        )}
+        <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+          {dateStr && <span className="text-xs text-gray-400">{dateStr}</span>}
+          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 ml-auto">
+            Published
+          </span>
+        </div>
+        {expanded && (
+          <div className="mt-3 pt-3 border-t space-y-2">
+            {post.linkedin_post_url && (
+              <a
+                href={post.linkedin_post_url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs text-blue-600 hover:text-blue-800 block"
+              >
+                View on LinkedIn →
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function LinkedInHistory() {
   const { posts, loading, fetch: fetchPosts, importFile, scrape, remove } = useLinkedInPostsStore();
+  const allPosts = usePostsStore((s) => s.posts);
+  const fetchAllPosts = usePostsStore((s) => s.fetch);
+  const publishedLinkdupPosts = allPosts
+    .filter((p) => p.status === "Published")
+    .sort((a, b) => {
+      const da = a.publication_date || a.created_at;
+      const db = b.publication_date || b.created_at;
+      return db.localeCompare(da);
+    });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
   const [scraping, setScraping] = useState(false);
@@ -15,6 +103,7 @@ export function LinkedInHistory() {
 
   useEffect(() => {
     fetchPosts();
+    fetchAllPosts();
   }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,11 +239,11 @@ export function LinkedInHistory() {
         <button
           onClick={() => setSortDir(sortDir === "desc" ? "asc" : "desc")}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition sm:ml-auto"
-          title={sortDir === "desc" ? "Plus récent en premier — cliquer pour inverser" : "Plus ancien en premier — cliquer pour inverser"}
+          title={sortDir === "desc" ? "Newest first — click to reverse" : "Oldest first — click to reverse"}
         >
           <span>Date</span>
           <span className="text-sm leading-none">{sortDir === "desc" ? "↓" : "↑"}</span>
-          <span className="text-gray-500">{sortDir === "desc" ? "Récent" : "Ancien"}</span>
+          <span className="text-gray-500">{sortDir === "desc" ? "Newest" : "Oldest"}</span>
         </button>
       </div>
 
@@ -180,6 +269,21 @@ export function LinkedInHistory() {
           <li>Re-running scrape only adds <strong>new</strong> URLs; it does not refresh metrics on existing rows.</li>
         </ul>
       </details>
+
+      {/* ── Published via LinkDup ── */}
+      {publishedLinkdupPosts.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-semibold text-gray-700 mb-3">
+            Published via LinkDup ({publishedLinkdupPosts.length})
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+            {publishedLinkdupPosts.map((post) => (
+              <LinkdupPostCard key={post.id} post={post} />
+            ))}
+          </div>
+          <div className="border-t border-gray-200 mt-6 mb-6" />
+        </div>
+      )}
 
       {/* ── Content ── */}
       {loading ? (

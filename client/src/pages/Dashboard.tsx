@@ -319,7 +319,7 @@ export function Dashboard() {
 
   const cards = [
     { label: "In Pipeline", count: pipelineCount, href: "/posts", color: "text-blue-600" },
-    { label: "Published", count: publishedPosts.length, href: "/posts?status=Published", color: "text-green-600" },
+    { label: "Published", count: publishedPosts.length, href: "/linkedin", color: "text-green-600" },
     { label: "Styles", count: styles.length, href: "/styles", color: "text-purple-600" },
     { label: "Templates", count: templates.length, href: "/templates", color: "text-orange-600" },
     { label: "Contenus", count: contenus.length, href: "/contenus", color: "text-teal-600" },
@@ -375,7 +375,7 @@ export function Dashboard() {
           <h3 className="font-medium mb-3">Post Status</h3>
           <div className="flex flex-wrap gap-6 text-sm">
             <button
-              onClick={() => navigate("/posts?status=Published")}
+              onClick={() => navigate("/linkedin")}
               className="text-green-600 hover:text-green-800 hover:underline cursor-pointer"
             >
               {published} published
@@ -448,7 +448,7 @@ export function Dashboard() {
             </h3>
             {publishedPosts.length > 3 && (
               <button
-                onClick={() => navigate("/posts?status=Published")}
+                onClick={() => navigate("/linkedin")}
                 className="text-xs text-green-600 hover:text-green-800 hover:underline"
               >
                 View all ({publishedPosts.length}) →
