@@ -126,6 +126,19 @@ function runMigrations(database: Database.Database): void {
     // Column already exists
   }
 
+  // Migration: Branding assets — logo path + brand identity document
+  for (const col of [
+    "logo_path TEXT",
+    "brand_identity_path TEXT",
+    "brand_identity_text TEXT",
+  ]) {
+    try {
+      database.exec(`ALTER TABLE settings ADD COLUMN ${col}`);
+    } catch {
+      // Column already exists
+    }
+  }
+
   // Migration: Normalize post statuses from French to English
   try {
     database.exec("UPDATE posts SET status = 'Published' WHERE status IN ('Publié', 'Publie')");

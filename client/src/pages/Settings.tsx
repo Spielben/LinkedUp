@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { apiFetch, readApiJson } from "../lib/api";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { apiFetch, apiUrl, readApiJson } from "../lib/api";
 
 interface SettingsData {
   name?: string;
@@ -11,6 +11,9 @@ interface SettingsData {
   preferred_post_days?: string;
   preferred_post_time?: string;
   timezone?: string;
+  logo_path?: string | null;
+  brand_identity_path?: string | null;
+  brand_identity_text?: string | null;
 }
 
 const TIMEZONES = [
@@ -53,6 +56,13 @@ const SUPPORTED_LANGUAGES = [
 export function Settings() {
   const [settings, setSettings] = useState<SettingsData>({});
   const [saved, setSaved] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [brandUploading, setBrandUploading] = useState(false);
+  const [brandError, setBrandError] = useState<string | null>(null);
+  const [brandSuccess, setBrandSuccess] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const brandInputRef = useRef<HTMLInputElement>(null);
   const [linkedinStatus, setLinkedinStatus] = useState<LinkedInStatus>({ connected: false });
   const [linkedinLoading, setLinkedinLoading] = useState(false);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
@@ -167,6 +177,61 @@ export function Settings() {
         setTimeout(() => setSaved(false), 2000);
       }
     });
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    setLogoError(null);
+    try {
+      const form = new FormData();
+      form.append("logo", file);
+      const res = await apiFetch("/api/settings/logo", { method: "POST", body: form });
+      const data = await readApiJson<{ logo_path?: string; error?: string }>(res);
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Upload failed");
+      setSettings((s) => ({ ...s, logo_path: data.logo_path }));
+    } catch (err: unknown) {
+      setLogoError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  const handleLogoDelete = async () => {
+    setLogoError(null);
+    await apiFetch("/api/settings/logo", { method: "DELETE" });
+    setSettings((s) => ({ ...s, logo_path: null }));
+  };
+
+  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBrandUploading(true);
+    setBrandError(null);
+    setBrandSuccess(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await apiFetch("/api/settings/brand-identity", { method: "POST", body: form });
+      const data = await readApiJson<{ brand_identity_path?: string; chars?: number; filename?: string; error?: string }>(res);
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Upload failed");
+      setSettings((s) => ({ ...s, brand_identity_path: data.brand_identity_path }));
+      setBrandSuccess(`"${data.filename}" uploaded — ${data.chars?.toLocaleString()} characters extracted`);
+      setTimeout(() => setBrandSuccess(null), 5000);
+    } catch (err: unknown) {
+      setBrandError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBrandUploading(false);
+      if (brandInputRef.current) brandInputRef.current.value = "";
+    }
+  };
+
+  const handleBrandDelete = async () => {
+    setBrandError(null);
+    await apiFetch("/api/settings/brand-identity", { method: "DELETE" });
+    setSettings((s) => ({ ...s, brand_identity_path: null, brand_identity_text: null }));
   };
 
   return (
@@ -302,6 +367,136 @@ export function Settings() {
         >
           {saved ? "Saved!" : "Save Settings"}
         </button>
+      </div>
+
+      {/* ── Logo ── */}
+      <h3 className="text-lg font-semibold mt-8 mb-1">Brand Logo</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        PNG, JPEG or WebP — up to 5 MB. Used as a visual identity marker on posts and exports.
+      </p>
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        {logoError && (
+          <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between">
+            <span>{logoError}</span>
+            <button onClick={() => setLogoError(null)} className="text-red-400 hover:text-red-600 ml-2">✕</button>
+          </div>
+        )}
+        {settings.logo_path ? (
+          <div className="flex items-center gap-4">
+            <img
+              src={apiUrl(settings.logo_path)}
+              alt="Brand logo"
+              className="h-16 w-auto object-contain rounded border border-gray-200 bg-gray-50 p-1"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-700">Logo uploaded</p>
+              <p className="text-xs text-gray-400 mt-0.5 break-all">{settings.logo_path}</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => logoInputRef.current?.click()}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Replace
+              </button>
+              <button
+                onClick={() => void handleLogoDelete()}
+                className="text-sm text-red-600 hover:text-red-800 font-medium"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">No logo uploaded yet.</p>
+            <button
+              onClick={() => logoInputRef.current?.click()}
+              disabled={logoUploading}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {logoUploading ? "Uploading…" : "Upload Logo"}
+            </button>
+          </div>
+        )}
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg,image/webp"
+          onChange={(e) => void handleLogoUpload(e)}
+          className="hidden"
+        />
+      </div>
+
+      {/* ── Brand Identity ── */}
+      <h3 className="text-lg font-semibold mt-8 mb-1">Brand Identity & Tone of Voice</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Upload a PDF, Word doc (.docx), or text file (.txt / .md) that describes your brand voice,
+        writing style, persona, and communication guidelines. The content is extracted and
+        automatically injected into every AI generation prompt.
+      </p>
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        {brandError && (
+          <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex justify-between">
+            <span>{brandError}</span>
+            <button onClick={() => setBrandError(null)} className="text-red-400 hover:text-red-600 ml-2">✕</button>
+          </div>
+        )}
+        {brandSuccess && (
+          <div className="mb-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700">
+            {brandSuccess}
+          </div>
+        )}
+        {settings.brand_identity_path ? (
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0 text-purple-600 text-lg">
+                📄
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-700">Brand identity document loaded</p>
+                <p className="text-xs text-gray-400 mt-0.5 break-all">{settings.brand_identity_path}</p>
+                {settings.brand_identity_text && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ {settings.brand_identity_text.length.toLocaleString()} characters — active in AI generation
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => brandInputRef.current?.click()}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Replace
+                </button>
+                <button
+                  onClick={() => void handleBrandDelete()}
+                  className="text-sm text-red-600 hover:text-red-800 font-medium"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">No brand identity document uploaded.</p>
+            <button
+              onClick={() => brandInputRef.current?.click()}
+              disabled={brandUploading}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+            >
+              {brandUploading ? "Processing…" : "Upload Document"}
+            </button>
+          </div>
+        )}
+        <input
+          ref={brandInputRef}
+          type="file"
+          accept=".pdf,.docx,.txt,.md"
+          onChange={(e) => void handleBrandUpload(e)}
+          className="hidden"
+        />
       </div>
 
       <h3 className="text-lg font-semibold mt-8 mb-4">LinkedIn API</h3>

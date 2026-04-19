@@ -195,13 +195,17 @@ postsRouter.post("/:id/generate", async (req, res) => {
 
   const model = (post.model as string) || "anthropic/claude-sonnet-4";
 
+  const brandIdentityBlock = settings?.brand_identity_text
+    ? `## Brand Identity & Tone of Voice\n\n${settings.brand_identity_text}\n\n---\n\n`
+    : "";
+
   const prompt = `Tu es un expert en création de posts LinkedIn engageants et viraux.
 
 Ton objectif est de rédiger 3 versions différentes d'un post LinkedIn en respectant le style d'écriture, la structure du template (si fourni), et en intégrant le contenu de référence (si fourni).
 
 ---
 
-## Informations du post
+${brandIdentityBlock}## Informations du post
 
 **Sujet** : ${post.subject}
 

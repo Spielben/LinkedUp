@@ -88,6 +88,10 @@ export function createServer(port = 3000) {
   fs.mkdirSync(mediaDir, { recursive: true });
   app.use("/data/media", express.static(mediaDir));
 
+  const brandingDir = path.join(process.cwd(), "data", "branding");
+  fs.mkdirSync(brandingDir, { recursive: true });
+  app.use("/data/branding", express.static(brandingDir));
+
   // dist/src at runtime (Docker / tsc); cwd is project root (/app in container)
   const clientDist = path.join(process.cwd(), "dist", "client");
   const isDev = Boolean(process.env.DEV);
