@@ -83,7 +83,11 @@ export const usePostsStore = create<PostsStore>((set, get) => ({
   },
 
   remove: async (id) => {
-    await apiFetch(`/api/posts/${id}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/posts/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? `Delete failed (${res.status})`);
+    }
     set({ posts: get().posts.filter((p) => p.id !== id) });
   },
 

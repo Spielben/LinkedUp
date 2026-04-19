@@ -427,8 +427,13 @@ export function PostDetail() {
       setConfirmDelete(true);
       return;
     }
-    await remove(post.id);
-    navigate("/posts");
+    try {
+      await remove(post.id);
+      navigate("/posts");
+    } catch (err: unknown) {
+      setConfirmDelete(false);
+      showToast(err instanceof Error ? err.message : "Delete failed", "error");
+    }
   };
 
   const handleGenerate = async () => {

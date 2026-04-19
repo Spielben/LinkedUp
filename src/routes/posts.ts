@@ -138,8 +138,16 @@ postsRouter.put("/:id", (req, res) => {
 
 postsRouter.delete("/:id", (req, res) => {
   const db = getDb();
-  db.prepare("DELETE FROM posts WHERE id = ?").run(req.params.id);
-  res.json({ ok: true });
+  try {
+    // Delete dependent rows first (foreign_keys = ON prevents deleting parent with children)
+    db.prepare("DELETE FROM token_usage WHERE post_id = ?").run(req.params.id);
+    db.prepare("DELETE FROM publish_log WHERE post_id = ?").run(req.params.id);
+    db.prepare("DELETE FROM posts WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
 });
 
 // ── Upload image file → data/media/posts/:id/ (for LinkedIn publish) ───────
