@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { usePostsStore, type Post } from "../stores/posts";
 import { useStylesStore } from "../stores/styles";
@@ -267,6 +267,347 @@ function ScheduledPostCard({
   );
 }
 
+// ── Calendar helpers ──────────────────────────────────────────────────────────
+
+interface CalPost { id: number; subject: string | null; status: string }
+
+/** UTC SQLite date → "YYYY-MM-DD" in user timezone */
+function toDateKey(utcStr: string, timezone: string): string {
+  try {
+    const iso = utcStr.replace(" ", "T") + (utcStr.endsWith("Z") ? "" : "Z");
+    return new Intl.DateTimeFormat("sv-SE", {
+      timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(iso));
+  } catch { return ""; }
+}
+
+/** Today's key in user timezone */
+function todayKey(timezone: string): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
+/** Add n days to a "YYYY-MM-DD" key (local date arithmetic) */
+function addDays(key: string, n: number): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return [dt.getFullYear(), String(dt.getMonth() + 1).padStart(2, "0"), String(dt.getDate()).padStart(2, "0")].join("-");
+}
+
+/** Add n months to a "YYYY-MM-DD" key, returns first of that month */
+function addMonths(key: string, n: number): string {
+  const [y, m] = key.split("-").map(Number);
+  const dt = new Date(y, m - 1 + n, 1);
+  return [dt.getFullYear(), String(dt.getMonth() + 1).padStart(2, "0"), "01"].join("-");
+}
+
+/** 7 date keys for the week containing anchorKey (Mon–Sun) */
+function getWeekDays(anchorKey: string): string[] {
+  const [y, m, d] = anchorKey.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay(); // 0=Sun
+  const monday = addDays(anchorKey, dow === 0 ? -6 : 1 - dow);
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+}
+
+/** All day keys (or null for padding) for a calendar month grid (Mon-first) */
+function getMonthCells(anchorKey: string): (string | null)[] {
+  const [y, m] = anchorKey.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const startDow = new Date(y, m - 1, 1).getDay(); // 0=Sun
+  const pad = startDow === 0 ? 6 : startDow - 1;
+  const cells: (string | null)[] = Array(pad).fill(null);
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push(`${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
+function fmtMonthLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+function fmtWeekRange(days: string[]): string {
+  const fmt = (k: string) => {
+    const [y, m, d] = k.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  };
+  return `${fmt(days[0])} – ${fmt(days[6])}`;
+}
+
+// ── Calendar sub-components ───────────────────────────────────────────────────
+
+function PostChip({ post, onClick }: { post: CalPost; onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={post.subject ?? "(untitled)"}
+      className={`w-full text-left text-xs px-1.5 py-0.5 rounded truncate font-medium leading-tight ${
+        post.status === "Published"
+          ? "bg-green-100 text-green-800 hover:bg-green-200"
+          : "bg-teal-100 text-teal-800 hover:bg-teal-200"
+      }`}
+    >
+      {post.subject ?? "(untitled)"}
+    </button>
+  );
+}
+
+function MiniMonth({
+  monthKey,
+  postsByDate,
+  today,
+  onPostClick,
+}: {
+  monthKey: string;
+  postsByDate: Map<string, CalPost[]>;
+  today: string;
+  onPostClick: (id: number) => void;
+}) {
+  const cells = getMonthCells(monthKey);
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-3">
+      <p className="text-xs font-semibold text-gray-700 mb-2">{fmtMonthLabel(monthKey)}</p>
+      <div className="grid grid-cols-7 gap-px">
+        {["M","T","W","T","F","S","S"].map((h, i) => (
+          <div key={i} className="text-center text-[10px] text-gray-400 pb-1">{h}</div>
+        ))}
+        {cells.map((key, i) => {
+          if (!key) return <div key={i} className="h-6" />;
+          const dayPosts = postsByDate.get(key) ?? [];
+          const isToday = key === today;
+          const [,,d] = key.split("-").map(Number);
+          return (
+            <div key={key} className="flex flex-col items-center gap-0.5 py-0.5">
+              <div className={`text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-medium ${
+                isToday ? "bg-blue-600 text-white" : "text-gray-600"
+              }`}>
+                {d}
+              </div>
+              {dayPosts.length > 0 && (
+                <div className="flex flex-wrap gap-px justify-center">
+                  {dayPosts.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => onPostClick(p.id)}
+                      title={p.subject ?? "(untitled)"}
+                      className={`w-2 h-2 rounded-full ${p.status === "Published" ? "bg-green-500 hover:bg-green-700" : "bg-teal-500 hover:bg-teal-700"}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── PostCalendar ──────────────────────────────────────────────────────────────
+
+function PostCalendar({
+  posts,
+  timezone,
+  onPostClick,
+}: {
+  posts: Post[];
+  timezone: string;
+  onPostClick: (id: number) => void;
+}) {
+  type ViewMode = "week" | "month" | "6months";
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const today = useMemo(() => todayKey(timezone), [timezone]);
+  const [navKey, setNavKey] = useState(today);
+
+  // Map dateKey → posts
+  const postsByDate = useMemo(() => {
+    const map = new Map<string, CalPost[]>();
+    for (const p of posts) {
+      if (!p.publication_date) continue;
+      if (p.status !== "Scheduled" && p.status !== "Published") continue;
+      const key = toDateKey(p.publication_date, timezone);
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push({ id: p.id, subject: p.subject, status: p.status });
+    }
+    return map;
+  }, [posts, timezone]);
+
+  // Navigation
+  const handlePrev = () => {
+    if (viewMode === "week")     setNavKey((k) => addDays(k, -7));
+    if (viewMode === "month")    setNavKey((k) => addMonths(k, -1));
+    if (viewMode === "6months")  setNavKey((k) => addMonths(k, -6));
+  };
+  const handleNext = () => {
+    if (viewMode === "week")     setNavKey((k) => addDays(k, 7));
+    if (viewMode === "month")    setNavKey((k) => addMonths(k, 1));
+    if (viewMode === "6months")  setNavKey((k) => addMonths(k, 6));
+  };
+  const handleToday = () => setNavKey(today);
+
+  const weekDays = useMemo(() => getWeekDays(navKey), [navKey]);
+  const monthCells = useMemo(() => getMonthCells(navKey), [navKey]);
+  const sixMonths = useMemo(
+    () => Array.from({ length: 6 }, (_, i) => addMonths(navKey, i)),
+    [navKey]
+  );
+
+  // Period label
+  const periodLabel =
+    viewMode === "week"
+      ? fmtWeekRange(weekDays)
+      : viewMode === "month"
+      ? fmtMonthLabel(navKey)
+      : `${fmtMonthLabel(navKey)} – ${fmtMonthLabel(sixMonths[5])}`;
+
+  const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <h3 className="font-semibold text-gray-700 shrink-0">Content Calendar</h3>
+
+        {/* View toggle */}
+        <div className="flex border border-gray-200 rounded-lg overflow-hidden ml-auto">
+          {(["week", "month", "6months"] as ViewMode[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => { setViewMode(v); setNavKey(today); }}
+              className={`px-3 py-1.5 text-xs font-medium transition ${
+                viewMode === v ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              {v === "6months" ? "6 months" : v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handlePrev}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 text-sm"
+          >‹</button>
+          <button
+            onClick={handleToday}
+            className="px-2.5 py-1 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-100 font-medium"
+          >Today</button>
+          <button
+            onClick={handleNext}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 text-sm"
+          >›</button>
+        </div>
+
+        <span className="text-sm font-medium text-gray-700 w-full sm:w-auto">{periodLabel}</span>
+      </div>
+
+      {/* ── Legend ── */}
+      <div className="flex gap-4 mb-3 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block" />Scheduled
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />Published
+        </span>
+      </div>
+
+      {/* ── Week view ── */}
+      {viewMode === "week" && (
+        <div className="overflow-x-auto -mx-1">
+          <div className="grid grid-cols-7 min-w-[560px]">
+            {weekDays.map((key, i) => {
+              const isToday = key === today;
+              const [,,d] = key.split("-").map(Number);
+              return (
+                <div key={key} className="text-center pb-2 border-b border-gray-100">
+                  <div className={`text-xs font-medium ${isToday ? "text-blue-600" : "text-gray-400"}`}>
+                    {DAY_HEADERS[i]}
+                  </div>
+                  <div className={`text-lg font-bold leading-tight ${isToday ? "text-blue-600" : "text-gray-800"}`}>
+                    {d}
+                  </div>
+                </div>
+              );
+            })}
+            {weekDays.map((key) => {
+              const isToday = key === today;
+              const dayPosts = postsByDate.get(key) ?? [];
+              return (
+                <div
+                  key={key}
+                  className={`min-h-[80px] border-r last:border-r-0 border-gray-100 p-1 space-y-1 ${
+                    isToday ? "bg-blue-50" : ""
+                  }`}
+                >
+                  {dayPosts.map((p) => (
+                    <PostChip key={p.id} post={p} onClick={() => onPostClick(p.id)} />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Month view ── */}
+      {viewMode === "month" && (
+        <div>
+          <div className="grid grid-cols-7 mb-1">
+            {DAY_HEADERS.map((h) => (
+              <div key={h} className="text-center text-xs font-medium text-gray-400 py-1">{h}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-lg overflow-hidden border border-gray-100">
+            {monthCells.map((key, i) => {
+              if (!key) return <div key={i} className="bg-gray-50 min-h-[64px]" />;
+              const isToday = key === today;
+              const dayPosts = postsByDate.get(key) ?? [];
+              const [,,d] = key.split("-").map(Number);
+              return (
+                <div key={key} className={`bg-white p-1 min-h-[64px] ${isToday ? "bg-blue-50" : ""}`}>
+                  <div className={`text-xs font-medium mb-1 w-5 h-5 flex items-center justify-center rounded-full ${
+                    isToday ? "bg-blue-600 text-white" : "text-gray-500"
+                  }`}>
+                    {d}
+                  </div>
+                  <div className="space-y-0.5">
+                    {dayPosts.slice(0, 2).map((p) => (
+                      <PostChip key={p.id} post={p} onClick={() => onPostClick(p.id)} />
+                    ))}
+                    {dayPosts.length > 2 && (
+                      <p className="text-[10px] text-gray-400 pl-1">+{dayPosts.length - 2} more</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── 6-month view ── */}
+      {viewMode === "6months" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {sixMonths.map((mk) => (
+            <MiniMonth
+              key={mk}
+              monthKey={mk}
+              postsByDate={postsByDate}
+              today={today}
+              onPostClick={onPostClick}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export function Dashboard() {
@@ -353,7 +694,27 @@ export function Dashboard() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate("/contenus")}
+            className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition"
+          >
+            + New Content
+          </button>
+          <button
+            onClick={async () => {
+              const { create } = usePostsStore.getState();
+              const post = await create({ subject: "New post" });
+              navigate(`/posts/${post.id}`);
+            }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+          >
+            + New Post
+          </button>
+        </div>
+      </div>
 
       {/* ── Summary cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
@@ -368,6 +729,13 @@ export function Dashboard() {
           </a>
         ))}
       </div>
+
+      {/* ── Content Calendar ───────────────────────────────────────────────── */}
+      <PostCalendar
+        posts={posts}
+        timezone={timezone}
+        onPostClick={(id) => navigate(`/posts/${id}`)}
+      />
 
       {/* ── Post Status ────────────────────────────────────────────────────── */}
       {posts.length > 0 && (
