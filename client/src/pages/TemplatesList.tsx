@@ -117,6 +117,18 @@ export function TemplatesList() {
         ))}
       </div>
 
+      {/* ── How Templates work ── */}
+      <details className="mb-4 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <summary className="cursor-pointer font-medium text-gray-700">What is a Template?</summary>
+        <div className="mt-2 space-y-1.5 pl-1">
+          <p>A Template defines the <strong>structure</strong> of a LinkedIn post — the skeleton, not the content. The AI fills it with your subject matter while respecting the format.</p>
+          <p><strong>Template Text</strong> is the skeleton itself, written with placeholders — e.g. <em>"[Hook question]\n\n[3 insight bullets]\n\n[Call to action]"</em>.</p>
+          <p><strong>Example Text</strong> is a real, complete post that uses this structure. It helps the AI understand the tone and flow without being told explicitly.</p>
+          <p><strong>LinkedIn Post URL</strong> is optional — link to the original post if you're reverse-engineering a creator's structure.</p>
+          <p><strong>How to use it:</strong> Create a template → attach it to a post when generating → the AI drafts 3 versions that follow that exact structure.</p>
+        </div>
+      </details>
+
       {importMessage && (
         <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
           {importMessage}
@@ -125,25 +137,30 @@ export function TemplatesList() {
 
       {showForm && (
         <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="font-medium mb-4">Create New Template</h3>
+          <h3 className="font-medium mb-1">Create New Template</h3>
+          <p className="text-xs text-gray-500 mb-4">Define a post structure. At minimum fill in Name and Template Text — everything else is optional but improves AI output quality.</p>
           <form onSubmit={handleCreateSubmit} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <p className="text-xs text-gray-400 mb-1">Short label, e.g. "Problem → Insight → CTA" or "5-bullet list".</p>
                 <input type="text" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
+                <p className="text-xs text-gray-400 mb-1">Who created or popularized this format.</p>
                 <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.author} onChange={(e) => setFormData({ ...formData, author: e.target.value })} />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <p className="text-xs text-gray-400 mb-1">One sentence describing when or why to use this template.</p>
               <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <p className="text-xs text-gray-400 mb-1">Used for filtering your library.</p>
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
                   <option value="Business">Business</option>
                   <option value="Lead Magnet">Lead Magnet</option>
@@ -154,15 +171,18 @@ export function TemplatesList() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn Post URL</label>
+                <p className="text-xs text-gray-400 mb-1">Link to the original post you're borrowing the structure from.</p>
                 <input type="url" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.linkedin_post_url} onChange={(e) => setFormData({ ...formData, linkedin_post_url: e.target.value })} />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Example Text</label>
+              <p className="text-xs text-gray-400 mb-1">A complete, real post that follows this structure — shows the AI the intended tone and flow.</p>
               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" rows={3} value={formData.example_text} onChange={(e) => setFormData({ ...formData, example_text: e.target.value })} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Template Text</label>
+              <p className="text-xs text-gray-400 mb-1">The skeleton with placeholders — e.g. "[Hook]\n\n[3 key points]\n\n[CTA]". This is what the AI will follow to structure each post.</p>
               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" rows={3} value={formData.template_text} onChange={(e) => setFormData({ ...formData, template_text: e.target.value })} />
             </div>
             <div className="flex gap-2">

@@ -131,6 +131,17 @@ export function ContenusList() {
         </div>
       </div>
 
+      {/* ── How Content works ── */}
+      <details className="mb-4 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <summary className="cursor-pointer font-medium text-gray-700">What is Content?</summary>
+        <div className="mt-2 space-y-1.5 pl-1">
+          <p>Content sources are <strong>reference documents</strong> the AI reads before writing a post. Think of it as your briefing file — a YouTube video, an article, a PDF report, or any web page you want to turn into LinkedIn content.</p>
+          <p><strong>Types:</strong> <em>Web</em> scrapes a URL, <em>YouTube</em> extracts the video transcript, <em>PDF</em> and <em>Article</em> let you upload a file directly.</p>
+          <p><strong>Ingest</strong> = the system fetches or reads the source and extracts the text. Until a content is ingested, it has no summary and won't influence AI generation.</p>
+          <p><strong>How to use it:</strong> Create → Ingest → open a Post and attach this content source → the AI will ground its writing in that material.</p>
+        </div>
+      </details>
+
       {importMessage && (
         <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
           {importMessage}
@@ -139,30 +150,35 @@ export function ContenusList() {
 
       {showForm && (
         <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="font-medium mb-4">Create New Content</h3>
+          <h3 className="font-medium mb-1">Create New Content</h3>
+          <p className="text-xs text-gray-500 mb-4">Add a reference source for the AI to draw from. After creating it, click <strong>Ingest</strong> to extract the text.</p>
           <form onSubmit={handleCreateSubmit} className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <p className="text-xs text-gray-400 mb-1">A label for this source, e.g. "Q1 2025 Report" or "Thomas interview — AI in film".</p>
               <input type="text" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <p className="text-xs text-gray-400 mb-1">Optional note to remind you what this source covers or why you added it.</p>
               <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <p className="text-xs text-gray-400 mb-1">Determines how the content is ingested.</p>
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })}>
-                  <option value="Web">Web</option>
-                  <option value="YouTube">YouTube</option>
-                  <option value="PDF">PDF</option>
-                  <option value="Article">Article</option>
-                  <option value="Podcast">Podcast</option>
+                  <option value="Web">Web — scrape any URL</option>
+                  <option value="YouTube">YouTube — extract transcript</option>
+                  <option value="PDF">PDF — upload a PDF file</option>
+                  <option value="Article">Article — upload HTML / text file</option>
+                  <option value="Podcast">Podcast — URL or notes</option>
                 </select>
               </div>
               {(formData.type === "Article" || formData.type === "PDF") ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Upload file</label>
+                  <p className="text-xs text-gray-400 mb-1">{formData.type === "PDF" ? "PDF file (.pdf)." : "HTML, TXT, MD, or Word document."}</p>
                   <input
                     type="file"
                     accept={formData.type === "PDF" ? ".pdf" : ".html,.txt,.md,.doc,.docx"}
@@ -173,6 +189,7 @@ export function ContenusList() {
               ) : (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">URL</label>
+                  <p className="text-xs text-gray-400 mb-1">{formData.type === "YouTube" ? "Full YouTube video URL." : "Public web page to scrape."}</p>
                   <input type="url" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.url} onChange={(e) => setFormData({ ...formData, url: e.target.value })} />
                 </div>
               )}

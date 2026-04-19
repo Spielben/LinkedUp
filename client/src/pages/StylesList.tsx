@@ -111,6 +111,16 @@ export function StylesList() {
         </div>
       </div>
 
+      {/* ── How Styles work ── */}
+      <details className="mb-4 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <summary className="cursor-pointer font-medium text-gray-700">What is a Style?</summary>
+        <div className="mt-2 space-y-1.5 pl-1">
+          <p>A Style captures a <strong>writing voice</strong> — yours, a colleague's, or a creator you admire. Once generated, the AI will imitate that voice when drafting your posts.</p>
+          <p><strong>How to use it:</strong> Create a style → paste example posts or link a LinkedIn profile → click <em>Generate</em> to let the AI analyze the tone, vocabulary and rhythm → attach the style when creating a post.</p>
+          <p><strong>Status "generated"</strong> means the style analysis is ready and will be injected into the writing prompt.</p>
+        </div>
+      </details>
+
       {importMessage && (
         <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
           {importMessage}
@@ -119,10 +129,12 @@ export function StylesList() {
 
       {showForm && (
         <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="font-medium mb-4">Create New Style</h3>
+          <h3 className="font-medium mb-1">Create New Style</h3>
+          <p className="text-xs text-gray-500 mb-4">Give the AI a writing voice to imitate. You need at least one of: example posts or a LinkedIn profile URL.</p>
           <form onSubmit={handleCreateSubmit} className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <p className="text-xs text-gray-400 mb-1">A label to identify this voice (e.g. "My style", "Thomas Ledoux", "Casual expert").</p>
               <input
                 type="text"
                 required
@@ -133,6 +145,7 @@ export function StylesList() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn URL (optional)</label>
+              <p className="text-xs text-gray-400 mb-1">Link to a LinkedIn profile. The scraper will pull recent posts from this account to analyze.</p>
               <input
                 type="url"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -142,6 +155,7 @@ export function StylesList() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Examples (optional)</label>
+              <p className="text-xs text-gray-400 mb-1">Paste 2–5 LinkedIn posts written in the style you want to replicate. The more varied the examples, the better the analysis.</p>
               <textarea
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 rows={4}
