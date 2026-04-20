@@ -34,21 +34,24 @@ function isAllowedDevCorsOrigin(origin: string): boolean {
 
 export function createServer(port = 3000) {
   const app = express();
+  const isDev = Boolean(process.env.DEV);
 
-  // CORS: Vite on :5173 / preview / vite --host (LAN) → API on :3000
-  app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (typeof origin === "string" && isAllowedDevCorsOrigin(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    }
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(204);
-    }
-    next();
-  });
+  // CORS: dev-only. In prod the UI is served by the same Express → no CORS needed.
+  if (isDev) {
+    app.use((req, res, next) => {
+      const origin = req.headers.origin;
+      if (typeof origin === "string" && isAllowedDevCorsOrigin(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
+        res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      }
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+      }
+      next();
+    });
+  }
 
   app.use(express.json({ limit: "50mb" }));
 
@@ -94,7 +97,6 @@ export function createServer(port = 3000) {
 
   // dist/src at runtime (Docker / tsc); cwd is project root (/app in container)
   const clientDist = path.join(process.cwd(), "dist", "client");
-  const isDev = Boolean(process.env.DEV);
   /** Vite dev server (UI with Tailwind HMR). Never serve stale dist/client in DEV. */
   const viteDevOrigin = (process.env.VITE_DEV_ORIGIN || "http://127.0.0.1:5173").replace(/\/$/, "");
 
