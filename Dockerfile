@@ -11,12 +11,15 @@ RUN npm run build
 # Runtime: production deps only (native modules compiled for this image)
 FROM node:20-alpine
 WORKDIR /app
-RUN apk add --no-cache python3 make g++ libsecret-dev
+RUN apk add --no-cache ca-certificates python3 make g++ libsecret-dev \
+  && update-ca-certificates
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 RUN mkdir -p /app/data
 EXPOSE 3000
+# Use OS CA store (after update-ca-certificates) for outbound HTTPS; helps TLS to many public sites
+ENV NODE_OPTIONS=--use-system-ca
 ENV NODE_ENV=production
 ENV USE_ENV_CREDENTIALS=true
 CMD ["node", "dist/src/cli.js"]

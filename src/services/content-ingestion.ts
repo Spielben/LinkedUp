@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { Agent, fetch as undiciFetch } from "undici";
 import mammoth from "mammoth";
 
 const DATA_DIRNAME = "data";
@@ -106,6 +107,18 @@ export function transformGoogleDriveUrl(rawUrl: string): string | null {
 
 const WEB_FETCH_TIMEOUT_MS = 45_000;
 
+/** When "1", skip TLS certificate verification for web ingest only (self-hosted; MITM risk on untrusted networks). */
+const WEB_FETCH_TLS_INSECURE = process.env.LINKDUP_INSECURE_WEB_FETCH === "1";
+
+let insecureWebAgent: Agent | undefined;
+function getWebFetchDispatcher(): Agent | undefined {
+  if (!WEB_FETCH_TLS_INSECURE) return undefined;
+  if (!insecureWebAgent) {
+    insecureWebAgent = new Agent({ connect: { rejectUnauthorized: false } });
+  }
+  return insecureWebAgent;
+}
+
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -163,18 +176,35 @@ function formatFetchNetworkError(err: unknown): string {
   }
   const base = err instanceof Error ? err.message : String(err);
   if (!(err instanceof Error) || err.cause === undefined) {
-    return base;
+    return maybeAppendTlsHint(base);
   }
   const c = err.cause;
   if (c instanceof Error) {
-    return `${base}: ${c.message}`;
+    return maybeAppendTlsHint(`${base}: ${c.message}`);
   }
   if (typeof c === "object" && c !== null && "code" in c) {
     const code = String((c as NodeJS.ErrnoException).code ?? "");
     const msg = c instanceof Error ? c.message : String(c);
-    return code ? `${base}: ${code} — ${msg}` : `${base}: ${msg}`;
+    return maybeAppendTlsHint(code ? `${base}: ${code} — ${msg}` : `${base}: ${msg}`);
   }
-  return `${base}: ${String(c)}`;
+  return maybeAppendTlsHint(`${base}: ${String(c)}`);
+}
+
+function maybeAppendTlsHint(message: string): string {
+  if (WEB_FETCH_TLS_INSECURE) return message;
+  if (
+    /unable to verify|UNABLE_TO_VERIFY|certificate|CertVerify|self signed|SSL[ _]?routines|ERR_SSL|TLSV1_/i.test(
+      message
+    )
+  ) {
+    return (
+      message +
+      " — Avec l’image Docker à jour, les CA système devraient suffire. " +
+      "Dernier recours (site dont la chaîne TLS est défectueuse) : " +
+      "LINKDUP_INSECURE_WEB_FETCH=1 dans .env.production puis redémarrer le conteneur (désactive la vérification TLS, risque MITM)."
+    );
+  }
+  return message;
 }
 
 export async function fetchWebContent(url: string): Promise<string> {
@@ -199,11 +229,15 @@ export async function fetchWebContent(url: string): Promise<string> {
   }
   assertPublicHttpUrl(finalUrl);
 
-  let response: Response;
+  const signal = AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS);
+  const dispatcher = getWebFetchDispatcher();
+  type UndiciRes = Awaited<ReturnType<typeof undiciFetch>>;
+  let response: UndiciRes;
   try {
-    response = await fetch(targetUrl, {
+    response = await undiciFetch(targetUrl, {
       headers: WEB_FETCH_HEADERS,
-      signal: AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS),
+      signal,
+      ...(dispatcher ? { dispatcher } : {}),
     });
   } catch (err) {
     throw new Error(formatFetchNetworkError(err));
