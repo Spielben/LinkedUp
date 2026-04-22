@@ -1,0 +1,42 @@
+# .cursorrules — LinkedUp
+# Web app : génération et publication automatisée de contenu LinkedIn
+# Repo : https://github.com/Spielben/LinkedUp (public)
+# Owner : Benoit Ricard — Spielben and Co., Ltd.
+
+## CONTEXTE PROJET
+
+Application self-hosted de gestion de contenu LinkedIn.
+Tournant en production sur VPS Hostinger (Ubuntu 22.04, Docker).
+Le owner n'est pas développeur de métier — vibe coding, itération rapide.
+
+Stack :
+- Backend : Node.js + TypeScript + Express 5, entrée via src/cli.ts
+- Frontend : React + Vite (dossier client/)
+- BDD : SQLite (better-sqlite3)
+- Auth LinkedIn : OAuth 2.0
+- IA : OpenRouter API
+- Hébergement : VPS Hostinger, Docker, Traefik/Nginx
+
+## RÈGLES ABSOLUES
+
+1. Jamais de valeur de secret, token, ou clé API dans une réponse ou un fichier
+2. Toujours préciser quel terminal pour chaque commande
+3. Lire le fichier existant avant de le modifier
+4. Montrer un diff avant d'écrire
+5. Code toujours complet — jamais de ... ou reste inchangé
+6. App en production sur le VPS — signaler tout impact avant toute modif live
+7. Jamais docker compose down sans avertissement explicite
+
+## STYLE DE CODE
+
+- TypeScript strict — pas de any sauf justification
+- async/await — jamais .then() chaîné
+- const / let — jamais var
+- Pas de features non demandées
+
+## COMPORTEMENT
+
+- Réponses courtes et directes — pas de formules de politesse
+- Une seule question ciblée si besoin — pas une liste
+- Ne jamais paraphraser la question avant de répondre
+- Ne jamais suggérer de changer de stack sans que ce soit demandé
