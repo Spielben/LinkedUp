@@ -13,6 +13,7 @@ import { importRouter } from "./routes/import.js";
 import { linkedinPostsRouter } from "./routes/linkedin-posts.js";
 import { linkedinAuthRouter } from "./routes/linkedin-auth.js";
 import { schedulerRouter } from "./routes/scheduler.js";
+import { basicAuth } from "./middleware/basicAuth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +55,7 @@ export function createServer(port = 3000) {
   }
 
   app.use(express.json({ limit: "50mb" }));
+  app.use(basicAuth);
 
   // API routes
   app.use("/api/posts", postsRouter);
