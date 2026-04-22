@@ -104,6 +104,79 @@ export function transformGoogleDriveUrl(rawUrl: string): string | null {
   return null;
 }
 
+const WEB_FETCH_TIMEOUT_MS = 45_000;
+
+const BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+const WEB_FETCH_HEADERS: Record<string, string> = {
+  "User-Agent": BROWSER_USER_AGENT,
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "fr,fr-FR;q=0.9,en-US,en;q=0.8",
+};
+
+function isIPv4DottedDecimal(host: string): boolean {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;
+  const parts = host.split(".").map((x) => Number.parseInt(x, 10));
+  return parts.length === 4 && parts.every((n) => n >= 0 && n <= 255);
+}
+
+/** Reject loopback, private, and link-local literal IPv4 (SSRF hardening for direct IPs). */
+function isPrivateOrLoopbackIPv4(host: string): boolean {
+  const parts = host.split(".").map((x) => Number.parseInt(x, 10));
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+    return false;
+  }
+  const [a, b, _c, _d] = parts;
+  if (a === 0 || a === 127) return true;
+  if (a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+/** Block obvious non-public targets (hostname or literal IP). Full DNS-SSRF hardening is not covered. */
+function assertPublicHttpUrl(u: URL): void {
+  const raw = u.hostname;
+  if (!raw) throw new Error("URL has no host");
+
+  const host = raw.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) {
+    throw new Error("This URL cannot be used for web ingest (local host is not allowed).");
+  }
+
+  const unbracketed = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (unbracketed === "::1" || (unbracketed.includes(":") && (unbracketed.toLowerCase().startsWith("fe80:") || /^f[cd][0-9a-f]{2}:/i.test(unbracketed)))) {
+    throw new Error("This URL cannot be used for web ingest (local or private address is not allowed).");
+  }
+  if (isIPv4DottedDecimal(unbracketed) && isPrivateOrLoopbackIPv4(unbracketed)) {
+    throw new Error("This URL cannot be used for web ingest (private or loopback address is not allowed).");
+  }
+}
+
+function formatFetchNetworkError(err: unknown): string {
+  if (err === null || err === undefined) return "Unknown error while fetching the URL";
+  if (err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError")) {
+    return `Request timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s while fetching the URL`;
+  }
+  const base = err instanceof Error ? err.message : String(err);
+  if (!(err instanceof Error) || err.cause === undefined) {
+    return base;
+  }
+  const c = err.cause;
+  if (c instanceof Error) {
+    return `${base}: ${c.message}`;
+  }
+  if (typeof c === "object" && c !== null && "code" in c) {
+    const code = String((c as NodeJS.ErrnoException).code ?? "");
+    const msg = c instanceof Error ? c.message : String(c);
+    return code ? `${base}: ${code} — ${msg}` : `${base}: ${msg}`;
+  }
+  return `${base}: ${String(c)}`;
+}
+
 export async function fetchWebContent(url: string): Promise<string> {
   let parsedUrl: URL;
   try {
@@ -117,12 +190,24 @@ export async function fetchWebContent(url: string): Promise<string> {
 
   const transformed = transformGoogleDriveUrl(url);
   const targetUrl = transformed ?? url;
-  const response = await fetch(targetUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; LINKDUP/1.0; +http://localhost:3000)",
-    },
-  });
+
+  let finalUrl: URL;
+  try {
+    finalUrl = new URL(targetUrl);
+  } catch {
+    throw new Error(`Invalid target URL: ${targetUrl}`);
+  }
+  assertPublicHttpUrl(finalUrl);
+
+  let response: Response;
+  try {
+    response = await fetch(targetUrl, {
+      headers: WEB_FETCH_HEADERS,
+      signal: AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new Error(formatFetchNetworkError(err));
+  }
 
   if ((response.status === 401 || response.status === 403) && transformed) {
     throw new Error("Document Google Drive non public. Partagez-le en lecture publique ou telechargez-le et uploadez le fichier.");

@@ -3,6 +3,19 @@ import { useContenusStore } from "../stores/contenus";
 import { importFile } from "../lib/import-file";
 import { apiFetch } from "../lib/api";
 
+async function errorMessageFromResponse(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text) as { error?: unknown };
+    if (typeof data.error === "string" && data.error) return data.error;
+  } catch {
+    // not JSON
+  }
+  const t = text.trim();
+  if (t.length > 0) return t.length > 500 ? `${t.slice(0, 500)}…` : t;
+  return res.statusText || `Request failed (${res.status})`;
+}
+
 export function ContenusList() {
   const { contenus, loading, fetch: fetchContenus, create: createContenu, remove: deleteContenu } = useContenusStore();
   const [ingestingId, setIngestingId] = useState<number | null>(null);
@@ -24,7 +37,7 @@ export function ContenusList() {
     setIngestError(null);
     try {
       const res = await apiFetch(`/api/contenus/${id}/ingest`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       await fetchContenus();
     } catch (err: unknown) {
       setIngestError(err instanceof Error ? err.message : String(err));
