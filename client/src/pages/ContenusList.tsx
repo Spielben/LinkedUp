@@ -256,8 +256,9 @@ export function ContenusList() {
                   {c.description && (
                     <p className="text-xs text-gray-500 mt-1 line-clamp-3 break-words">{c.description}</p>
                   )}
-                  {c.summary && (
-                    <p className={`text-xs text-gray-600 mt-1 italic break-words ${expandedId === c.id ? "" : "line-clamp-3 sm:line-clamp-2"}`}>
+                  {/* Aperçu seulement quand la carte n'est pas expand : le résumé complet est affiché une seule fois dans le panneau ci-dessous. */}
+                  {c.summary && expandedId !== c.id && (
+                    <p className="text-xs text-gray-600 mt-1 italic line-clamp-3 sm:line-clamp-2 break-words">
                       {c.summary}
                     </p>
                   )}
