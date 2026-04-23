@@ -19,8 +19,8 @@ seedRouter.post("/", (_req, res) => {
       const data = JSON.parse(fs.readFileSync(templatesPath, "utf-8"));
       const records = data.records || [];
       const insert = db.prepare(`
-        INSERT OR IGNORE INTO templates (name, description, linkedin_post_url, category, author, template_text, example_text, likes, comments, shares, publication_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO templates (name, description, linkedin_post_url, category, author, template_text, example_text, likes, comments, shares, impressions, publication_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const tx = db.transaction(() => {
@@ -38,6 +38,7 @@ seedRouter.post("/", (_req, res) => {
             f["Likes"] || 0,
             f["Commentaires"] || 0,
             f["Partages"] || 0,
+            f["Impressions"] ?? 0,
             f["Date de publication"] || null
           );
           count++;

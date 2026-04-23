@@ -5,6 +5,7 @@ export interface Contenu {
   id: number;
   name: string;
   description: string | null;
+  category: string | null;
   url: string | null;
   type: string | null;
   pdf_path: string | null;

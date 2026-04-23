@@ -18,11 +18,35 @@ templatesRouter.get("/:id", (req, res) => {
 
 templatesRouter.post("/", (req, res) => {
   const db = getDb();
-  const { name, description, linkedin_post_url, category, author } = req.body;
-  const result = db.prepare(
-    "INSERT INTO templates (name, description, linkedin_post_url, category, author) VALUES (?, ?, ?, ?, ?)"
-  ).run(name, description || null, linkedin_post_url || null, category || null, author || null);
-  res.status(201).json({ id: result.lastInsertRowid });
+  const b = req.body as Record<string, unknown>;
+  const name = typeof b.name === "string" ? b.name : "";
+  if (!name.trim()) {
+    return res.status(400).json({ error: "name is required" });
+  }
+  const toNum = (v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : parseInt(String(v ?? "0"), 10)) || 0;
+  const result = db
+    .prepare(
+      `INSERT INTO templates (name, description, linkedin_post_url, category, author, template_text, example_text, image_url,
+         likes, comments, shares, impressions, publication_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      name.trim(),
+      typeof b.description === "string" ? b.description : null,
+      typeof b.linkedin_post_url === "string" ? b.linkedin_post_url : null,
+      typeof b.category === "string" ? b.category : null,
+      typeof b.author === "string" ? b.author : null,
+      typeof b.template_text === "string" ? b.template_text : null,
+      typeof b.example_text === "string" ? b.example_text : null,
+      typeof b.image_url === "string" ? b.image_url : null,
+      toNum(b.likes),
+      toNum(b.comments),
+      toNum(b.shares),
+      toNum(b.impressions),
+      typeof b.publication_date === "string" ? b.publication_date : null
+    );
+  const created = db.prepare("SELECT * FROM templates WHERE id = ?").get(result.lastInsertRowid);
+  res.status(201).json(created);
 });
 
 templatesRouter.put("/:id", (req, res) => {

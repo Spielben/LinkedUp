@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS templates (
   likes INTEGER DEFAULT 0,
   comments INTEGER DEFAULT 0,
   shares INTEGER DEFAULT 0,
+  impressions INTEGER DEFAULT 0,
   publication_date TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS contenus (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   description TEXT,
+  category TEXT,
   url TEXT,
   type TEXT,
   pdf_path TEXT,

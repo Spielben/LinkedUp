@@ -148,6 +148,19 @@ function runMigrations(database: Database.Database): void {
   } catch (e) {
     // ignore
   }
+
+  // Migration: templates.impressions (LinkedIn-style metrics in UI)
+  try {
+    database.exec("ALTER TABLE templates ADD COLUMN impressions INTEGER DEFAULT 0");
+  } catch {
+    // Column already exists
+  }
+  // Migration: contenus.category (align with template categories: Business, Storytelling, etc.)
+  try {
+    database.exec("ALTER TABLE contenus ADD COLUMN category TEXT");
+  } catch {
+    // Column already exists
+  }
 }
 
 export function closeDb(): void {

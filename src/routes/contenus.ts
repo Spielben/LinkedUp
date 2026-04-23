@@ -120,11 +120,16 @@ contenusRouter.get("/:id", (req, res) => {
 
 contenusRouter.post("/", (req, res) => {
   const db = getDb();
-  const { name, description, url, type, content_raw } = req.body;
-  const result = db.prepare(
-    "INSERT INTO contenus (name, description, url, type, content_raw) VALUES (?, ?, ?, ?, ?)"
-  ).run(name, description || null, url || null, type || null, content_raw || null);
-  res.status(201).json({ id: result.lastInsertRowid });
+  const { name, description, url, type, content_raw, category } = req.body;
+  const cat =
+    typeof category === "string" && category.trim() ? category.trim() : null;
+  const result = db
+    .prepare(
+      "INSERT INTO contenus (name, description, category, url, type, content_raw) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    .run(name, description || null, cat, url || null, type || null, content_raw || null);
+  const created = db.prepare("SELECT * FROM contenus WHERE id = ?").get(result.lastInsertRowid);
+  res.status(201).json(created);
 });
 
 contenusRouter.post("/upload", (req, res, next) => {
@@ -145,14 +150,16 @@ contenusRouter.post("/upload", (req, res, next) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
   const description = typeof req.body.description === "string" ? req.body.description.trim() : "";
   const type = typeof req.body.type === "string" ? req.body.type.trim() : "";
+  const category =
+    typeof req.body.category === "string" && req.body.category.trim() ? req.body.category.trim() : null;
 
   if (!name) return res.status(400).json({ error: "Name is required" });
   if (!ALLOWED_CONTENT_TYPES.has(type)) return res.status(400).json({ error: "Type must be PDF or Article" });
   if (!req.file) return res.status(400).json({ error: "No file (field name: file)" });
 
   const result = db.prepare(
-    "INSERT INTO contenus (name, description, type, status) VALUES (?, ?, ?, 'pending')"
-  ).run(name, description || null, type);
+    "INSERT INTO contenus (name, description, category, type, status) VALUES (?, ?, ?, ?, 'pending')"
+  ).run(name, description || null, category, type);
   const id = Number(result.lastInsertRowid);
   const uploadDir = path.join(process.cwd(), "data", "contenus", String(id));
 

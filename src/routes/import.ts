@@ -233,8 +233,8 @@ function importTemplates(headers: string[], rows: string[][]): ImportResult {
   let skipped = 0;
   const selectByLinkedinUrl = db.prepare("SELECT id FROM templates WHERE linkedin_post_url = ?");
   const insert = db.prepare(
-    `INSERT INTO templates (name, description, linkedin_post_url, author, category, image_url, example_text, template_text, likes, comments, shares, publication_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO templates (name, description, linkedin_post_url, author, category, image_url, example_text, template_text, likes, comments, shares, impressions, publication_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const headerMap: Record<string, number> = {};
@@ -256,6 +256,11 @@ function importTemplates(headers: string[], rows: string[][]): ImportResult {
     const likes = parseInt(row[headerMap["Likes"]]?.trim() || row[headerMap["likes"]]?.trim() || "0", 10) || 0;
     const comments = parseInt(row[headerMap["Commentaires"]]?.trim() || row[headerMap["comments"]]?.trim() || "0", 10) || 0;
     const shares = parseInt(row[headerMap["Partages"]]?.trim() || row[headerMap["shares"]]?.trim() || "0", 10) || 0;
+    const impressions =
+      parseInt(
+        row[headerMap["Impressions"]]?.trim() || row[headerMap["impressions"]]?.trim() || "0",
+        10
+      ) || 0;
     const publication_date = row[headerMap["Date de publication"]]?.trim() || row[headerMap["publication_date"]]?.trim() || null;
 
     if (!name || !linkedin_post_url) {
@@ -281,6 +286,7 @@ function importTemplates(headers: string[], rows: string[][]): ImportResult {
         likes,
         comments,
         shares,
+        impressions,
         publication_date
       );
       imported += 1;
@@ -298,8 +304,8 @@ function importContenus(headers: string[], rows: string[][]): ImportResult {
   let skipped = 0;
   const selectByName = db.prepare("SELECT id FROM contenus WHERE name = ?");
   const insert = db.prepare(
-    `INSERT INTO contenus (name, description, url, type, content_raw, summary, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO contenus (name, description, category, url, type, content_raw, summary, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const headerMap: Record<string, number> = {};
@@ -324,6 +330,8 @@ function importContenus(headers: string[], rows: string[][]): ImportResult {
       row[headerMap["URL"]]?.trim() ||
       row[headerMap["url"]]?.trim() || null;
     const type = row[headerMap["Type"]]?.trim() || row[headerMap["type"]]?.trim() || null;
+    const category =
+      row[headerMap["Catégorie"]]?.trim() || row[headerMap["category"]]?.trim() || null;
     const content_raw = row[headerMap["Contenu"]]?.trim() || row[headerMap["content_raw"]]?.trim() || null;
     const summary = row[headerMap["Résumé"]]?.trim() || row[headerMap["summary"]]?.trim() || null;
     const generateCol =
@@ -347,7 +355,7 @@ function importContenus(headers: string[], rows: string[][]): ImportResult {
         skipped++;
         continue;
       }
-      insert.run(name, description, url, type, content_raw, summary, status);
+      insert.run(name, description, category, url, type, content_raw, summary, status);
       imported += 1;
     } catch (e) {
       skipped++;
