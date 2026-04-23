@@ -274,7 +274,7 @@ export function Settings() {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
-          <p className="text-xs text-gray-500 mb-1">Reserved for future UI/locale; AI prompts (ingest, posts, styles) are English.</p>
+          <p className="text-xs text-gray-500 mb-1">Default: English (international LinkedIn). Choose French for French AI outputs (ingest summaries, generated posts, style analysis). Other languages still use English prompts today.</p>
           <select
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             value={settings.language || "en"}

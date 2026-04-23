@@ -6,18 +6,50 @@ import { getDb } from "../db/index.js";
 import { callOpenRouter, estimateCost } from "../services/openrouter.js";
 import { extractFileContent, fetchWebContent, fetchYouTubeTranscript } from "../services/content-ingestion.js";
 
-/** Ingest summary: all AI prompts are English; output summary in English. */
+/** Ingest: English by default; French when Settings → language is `fr`. */
 function buildIngestSummaryPrompt(
   contenu: { type: string | null; name: string; description: string | null },
-  contentRaw: string
+  contentRaw: string,
+  useFrench: boolean
 ): string {
   const raw = contentRaw.slice(0, 20_000);
   const type = contenu.type || "Web";
   const name = contenu.name;
   const desc = contenu.description || "";
+  if (useFrench) {
+    return `Tu es un expert en synthèse de contenu.
+
+Analyse le contenu suivant et produis un résumé structuré en français qui servira de base pour la création de posts LinkedIn.
+
+---
+
+## Source
+
+**Type** : ${type}
+**Nom** : ${name}
+**Description** : ${desc}
+
+## Contenu brut
+
+${raw}
+
+---
+
+## Consignes
+
+1. Résumé (~2000-3000 caractères) :
+   - Les idées principales et arguments clés
+   - Les chiffres et statistiques mentionnés
+   - Les citations ou formulations marquantes
+   - Les appels à l'action ou offres
+   - Structuré en sections avec des bullet points
+2. Le résumé doit être suffisamment riche pour permettre de générer plusieurs posts LinkedIn
+
+Retourne uniquement le résumé structuré.`;
+  }
   return `You are a content summarization expert.
 
-Analyze the following and produce a structured summary to use as a basis for LinkedIn post creation. Write the entire summary in English.
+Analyze the following and produce a structured summary to use as a basis for LinkedIn post creation. Write the entire summary in English (default for international LinkedIn use).
 
 ---
 
@@ -196,10 +228,13 @@ contenusRouter.post("/:id/ingest", async (req, res) => {
       return res.status(400).json({ error: "No URL or PDF path to ingest" });
     }
 
-    // 2. Summarize with OpenRouter (English prompts and English summary output)
+    // 2. Summarize with OpenRouter (en default; fr when settings.language === 'fr')
+    const settingsRow = db.prepare("SELECT language FROM settings WHERE id = 1").get() as { language?: string } | undefined;
+    const useFrench = settingsRow?.language === "fr";
     const prompt = buildIngestSummaryPrompt(
       { type, name: String(contenu.name ?? ""), description: contenu.description },
-      content_raw
+      content_raw,
+      useFrench
     );
 
     const { content: summary, usage } = await callOpenRouter({

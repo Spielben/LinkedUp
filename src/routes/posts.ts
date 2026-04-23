@@ -199,9 +199,77 @@ postsRouter.post("/:id/generate", async (req, res) => {
     ? `## Brand Identity & Tone of Voice\n\n${settings.brand_identity_text}\n\n---\n\n`
     : "";
 
-  const prompt = `You are an expert at writing engaging, high-performing LinkedIn posts.
+  const useFr = (settings as { language?: string | null } | null | undefined)?.language === "fr";
 
-Your job is to write 3 different versions of a LinkedIn post, matching the writing style, following the template structure when provided, and using the reference content when provided. Write everything in English.
+  const prompt = useFr
+    ? `Tu es un expert en création de posts LinkedIn engageants et viraux.
+
+Ton objectif est de rédiger 3 versions différentes d'un post LinkedIn en respectant le style d'écriture, la structure du template (si fourni), et en intégrant le contenu de référence (si fourni). Rédige tout en français.
+
+---
+
+${brandIdentityBlock}## Informations du post
+
+**Sujet** : ${post.subject}
+
+**Description / instructions** :
+${post.description || "Aucune description fournie."}
+
+---
+
+## Style d'écriture à reproduire
+
+${post.style_instructions || "Aucun style défini. Utilise un ton professionnel et engageant."}
+
+---
+
+## Template / structure à suivre (optionnel)
+
+${post.template_text || "Aucun template fourni. Utilise une structure engageante adaptée au sujet."}
+
+---
+
+## Contenu de référence (optionnel)
+
+${post.contenu_summary || post.contenu_raw || "Aucun contenu de référence fourni."}
+
+---
+
+## Signature
+
+${settings?.signature || ""}
+
+---
+
+## Consignes
+
+1. Génère exactement 3 versions du post, chacune avec un angle/hook différent
+2. Chaque version doit :
+   - Respecter le ton de voix décrit dans le style
+   - Suivre la structure du template si fourni
+   - Intégrer les informations clés de la description
+   - Utiliser le contenu de référence si fourni
+   - Se terminer par la signature si fournie
+3. Les 3 versions doivent être distinctes :
+   - V1 : accroche par une question ou un problème
+   - V2 : accroche par une observation ou une analyse
+   - V3 : accroche par des chiffres, un angle original ou une liste
+4. Format LinkedIn : phrases courtes, sauts de ligne, emojis si le style le permet
+5. Longueur : 600-900 caractères par version
+
+Retourne le résultat dans ce format exact :
+
+V1:
+[contenu de la version 1]
+
+V2:
+[contenu de la version 2]
+
+V3:
+[contenu de la version 3]`
+    : `You are an expert at writing engaging, high-performing LinkedIn posts.
+
+Your job is to write 3 different versions of a LinkedIn post, matching the writing style, following the template structure when provided, and using the reference content when provided. Write everything in English (default for international LinkedIn).
 
 ---
 
@@ -334,7 +402,44 @@ postsRouter.post("/:id/optimize", async (req, res) => {
 
   const model = (post.model as string) || "anthropic/claude-sonnet-4";
 
-  const prompt = `You are an expert at optimizing LinkedIn posts.
+  const fullSettings = db.prepare("SELECT * FROM settings WHERE id = 1").get() as { language?: string | null } | undefined;
+  const useFr = fullSettings?.language === "fr";
+
+  const prompt = useFr
+    ? `Tu es un expert en optimisation de posts LinkedIn.
+
+Optimise le post suivant en appliquant les instructions d'optimisation tout en préservant le ton de voix de l'auteur. Rends le texte en français.
+
+---
+
+## Post actuel
+
+${post.final_version}
+
+---
+
+## Instructions d'optimisation
+
+${post.optimization_instructions}
+
+---
+
+## Style d'écriture à respecter
+
+${post.style_instructions || "Aucun style défini."}
+
+---
+
+## Consignes
+
+1. Applique les instructions d'optimisation au post
+2. Conserve le ton de voix et le style d'écriture
+3. Maintiens la structure générale du post
+4. Garde la même longueur approximative
+5. Ne change pas la signature
+
+Retourne uniquement le post optimisé, sans commentaire ni explication.`
+    : `You are an expert at optimizing LinkedIn posts.
 
 Refine the post below using the optimization instructions while preserving the author's voice. Output in English.
 

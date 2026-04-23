@@ -63,9 +63,48 @@ stylesRouter.post("/:id/generate", async (req, res) => {
 
   const model = "anthropic/claude-sonnet-4";
 
-  const prompt = `You are an expert in written communication and LinkedIn personal branding.
+  const settingsRow = db.prepare("SELECT language FROM settings WHERE id = 1").get() as { language?: string | null } | undefined;
+  const useFr = settingsRow?.language === "fr";
 
-From the sample LinkedIn posts below, deliver a full analysis of the author's writing style in 4 steps. Write your entire response in English (even if the sample posts are in another language—analyze and describe in English).
+  const prompt = useFr
+    ? `Tu es un expert en analyse de communication écrite et en personal branding LinkedIn.
+
+À partir des posts LinkedIn suivants, réalise une analyse complète du style d'écriture de l'auteur en 4 étapes. Rédige toute ta réponse en français (même si les posts d'exemple sont dans une autre langue : analyse et décris en français).
+
+---
+
+## Posts de l'auteur
+
+${style.examples}
+
+---
+
+## Étape 1 : Analyse des communications écrites
+
+Analyse les exemples selon ces critères :
+- **Niveau de formalité** : décontracté, professionnel, académique...
+- **Jargon** : vocabulaire technique utilisé, termes récurrents
+- **Ton émotionnel** : optimiste, provocateur, empathique, neutre...
+- **Verbosité** : concis ou élaboré, longueur des phrases
+- **Structure des phrases** : simples, complexes, alternance...
+- **Autres caractéristiques notables** : appels à l'action, emojis, formats, etc.
+
+## Étape 2 : Profil du ton de voix
+
+Rédige une description narrative détaillée du ton de voix de l'auteur. Inclus les thèmes récurrents identifiés dans ses posts.
+
+## Étape 3 : Paragraphe narratif (clé universelle)
+
+Rédige un paragraphe d'environ 100-150 mots qui capture parfaitement le style de l'auteur. Il doit servir de référence pour reproduire ce ton ; il doit sonner comme si l'auteur l'avait écrit.
+
+## Étape 4 : Guide du ton de voix
+
+Résume en un guide concis et actionnable : description du ton (puces) + la clé universelle de l'étape 3.
+
+Ce guide sera utilisé comme contexte pour la génération future de posts dans ce style.`
+    : `You are an expert in written communication and LinkedIn personal branding.
+
+From the sample LinkedIn posts below, deliver a full analysis of the author's writing style in 4 steps. Write your entire response in English (default; even if the sample posts are in another language—analyze and describe in English).
 
 ---
 
