@@ -18,8 +18,8 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 RUN mkdir -p /app/data
 EXPOSE 3000
-# Use OS CA store (after update-ca-certificates) for outbound HTTPS; helps TLS to many public sites
-ENV NODE_OPTIONS=--use-system-ca
+# After update-ca-certificates, use OpenSSL default CA path for TLS (not --use-system-ca: disallowed in NODE_OPTIONS)
+ENV NODE_OPTIONS=--use-openssl-ca
 ENV NODE_ENV=production
 ENV USE_ENV_CREDENTIALS=true
 CMD ["node", "dist/src/cli.js"]
