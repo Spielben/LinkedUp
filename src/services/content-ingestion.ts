@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import * as tls from "node:tls";
 import type { ConnectionOptions } from "node:tls";
 import { Agent, fetch as undiciFetch } from "undici";
 import mammoth from "mammoth";
@@ -111,14 +112,20 @@ const WEB_FETCH_TIMEOUT_MS = 45_000;
 /** When "1", skip TLS certificate verification for web ingest only (self-hosted; MITM risk on untrusted networks). */
 const WEB_FETCH_TLS_INSECURE = process.env.LINKDUP_INSECURE_WEB_FETCH === "1";
 
+/** When not "0", on TLS verify failure only, retry the same request with rejectUnauthorized: false (common fix for sites with incomplete cert chains; MITM possible if you distrust the route). */
+const WEB_FETCH_TLS_RETRY_INSECURE = process.env.LINKDUP_WEB_FETCH_TLS_RETRY_INSECURE !== "0";
+
 const SYSTEM_CA_BUNDLE_CANDIDATES = [
   "/etc/ssl/certs/ca-certificates.crt",
   "/etc/pki/tls/certs/ca-bundle.crt",
 ] as const;
 
-/** System / env PEM bundles for undici (does not depend on NODE_OPTIONS=--use-openssl-ca). */
-function loadWebFetchTlsConnectOptions(): ConnectionOptions | undefined {
+/** System + Node built-in CAs for undici (no reliance on NODE_OPTIONS). Always includes `tls.rootCertificates` then optional OS / env PEM files. */
+function loadWebFetchTlsConnectOptions(): ConnectionOptions {
   const chunks: Buffer[] = [];
+  for (const pem of tls.rootCertificates) {
+    if (pem.length) chunks.push(Buffer.from(pem, "utf8"));
+  }
   function tryAddFile(p: string): void {
     if (!p || !existsSync(p)) return;
     try {
@@ -130,18 +137,15 @@ function loadWebFetchTlsConnectOptions(): ConnectionOptions | undefined {
   }
   if (process.env.SSL_CERT_FILE?.trim()) {
     tryAddFile(process.env.SSL_CERT_FILE.trim());
-  }
-  if (chunks.length === 0) {
+  } else {
     for (const p of SYSTEM_CA_BUNDLE_CANDIDATES) {
       tryAddFile(p);
-      if (chunks.length > 0) break;
+      if (chunks.length > tls.rootCertificates.length) break;
     }
   }
-  // Append corporate / custom CA to the main bundle; if no main bundle, rely on default TLS + NODE_EXTRA_CA_CERTS on the process
-  if (chunks.length > 0 && process.env.NODE_EXTRA_CA_CERTS?.trim()) {
+  if (process.env.NODE_EXTRA_CA_CERTS?.trim()) {
     tryAddFile(process.env.NODE_EXTRA_CA_CERTS.trim());
   }
-  if (chunks.length === 0) return undefined;
   const ca: Buffer | Buffer[] = chunks.length === 1 ? chunks[0]! : chunks;
   return { ca, rejectUnauthorized: true };
 }
@@ -149,7 +153,21 @@ function loadWebFetchTlsConnectOptions(): ConnectionOptions | undefined {
 let webIngestUndiciAgent: Agent | undefined;
 let insecureWebAgent: Agent | undefined;
 
-/** Undici pool for `fetchWebContent` — explicit OS CA in Docker, default Node trust store locally when no bundle file. */
+function isTlsCertificateVerificationError(err: unknown): boolean {
+  const parts: string[] = [];
+  if (err instanceof Error) {
+    parts.push(err.message);
+    if (err.cause instanceof Error) parts.push(err.cause.message);
+  } else {
+    parts.push(String(err));
+  }
+  const t = parts.join(" ");
+  return /unable to verify|UNABLE_TO_VERIFY|CertVerify|certificate|self[ -]signed|SSL[ _]?routines|ERR_SSL|TLSV1_|unknown ca|depth zero/i.test(
+    t
+  );
+}
+
+/** Undici pool for `fetchWebContent` — Node root CAs + optional OS / env bundles; or fully insecure if LINKDUP_INSECURE_WEB_FETCH=1. */
 function getWebIngestUndiciAgent(): Agent {
   if (WEB_FETCH_TLS_INSECURE) {
     if (!insecureWebAgent) {
@@ -158,8 +176,7 @@ function getWebIngestUndiciAgent(): Agent {
     return insecureWebAgent;
   }
   if (!webIngestUndiciAgent) {
-    const connect = loadWebFetchTlsConnectOptions();
-    webIngestUndiciAgent = connect ? new Agent({ connect }) : new Agent();
+    webIngestUndiciAgent = new Agent({ connect: loadWebFetchTlsConnectOptions() });
   }
   return webIngestUndiciAgent;
 }
@@ -244,9 +261,8 @@ function maybeAppendTlsHint(message: string): string {
   ) {
     return (
       message +
-      " — L'ingest charge les CA du système (fichier conteneur) sans dépendre de NODE_OPTIONS. " +
-      "Si le site ne renvoie qu'une chaîne TLS incomplète, l'erreur peut rester. " +
-      "Dernier recours : LINKDUP_INSECURE_WEB_FETCH=1 dans .env.production puis redémarrer (désactive la vérification TLS, risque MITM)."
+      " — Par défaut, un second essai sans vérification du certificat est tenté (désactiver: LINKDUP_WEB_FETCH_TLS_RETRY_INSECURE=0). " +
+      "Si l'erreur reste, tout désactiver côté TLS : LINKDUP_INSECURE_WEB_FETCH=1 (risque MITM)."
     );
   }
   return message;
@@ -275,17 +291,30 @@ export async function fetchWebContent(url: string): Promise<string> {
   assertPublicHttpUrl(finalUrl);
 
   const signal = AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS);
-  const dispatcher = getWebIngestUndiciAgent();
+  const secureDispatcher = getWebIngestUndiciAgent();
   type UndiciRes = Awaited<ReturnType<typeof undiciFetch>>;
   let response: UndiciRes;
+  const fetchWithDispatcher = (d: Agent) =>
+    undiciFetch(targetUrl, { headers: WEB_FETCH_HEADERS, signal, dispatcher: d });
   try {
-    response = await undiciFetch(targetUrl, {
-      headers: WEB_FETCH_HEADERS,
-      signal,
-      dispatcher,
-    });
+    response = await fetchWithDispatcher(secureDispatcher);
   } catch (err) {
-    throw new Error(formatFetchNetworkError(err));
+    const canRetryInsecure =
+      WEB_FETCH_TLS_RETRY_INSECURE && !WEB_FETCH_TLS_INSECURE && isTlsCertificateVerificationError(err);
+    if (canRetryInsecure) {
+      console.warn(
+        "[fetchWebContent] TLS verification failed, retrying without cert verification. host=%s (set LINKDUP_WEB_FETCH_TLS_RETRY_INSECURE=0 to disable)",
+        finalUrl.hostname
+      );
+      const oneOff = new Agent({ connect: { rejectUnauthorized: false } });
+      try {
+        response = await fetchWithDispatcher(oneOff);
+      } catch (err2) {
+        throw new Error(formatFetchNetworkError(err2));
+      }
+    } else {
+      throw new Error(formatFetchNetworkError(err));
+    }
   }
 
   if ((response.status === 401 || response.status === 403) && transformed) {

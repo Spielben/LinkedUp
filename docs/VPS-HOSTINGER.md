@@ -45,6 +45,7 @@ Renseigner les clés (tableaux de bord des fournisseurs, hors terminal). **`LINK
 - L’image charge `ca-certificates` ; l’app d’ingest lit explicitement le bundle système (ex. `/etc/ssl/certs/ca-certificates.crt` dans le conteneur) pour `undici`, **sans** dépendre d’un `NODE_OPTIONS` correct.
 - Si tu ajoutes **`NODE_OPTIONS`** dans `.env.production`, tu **remplaces** entièrement la variable d’environnement du conteneur (y compris `--use-openssl-ca` défini dans le `Dockerfile`) : fusionne les flags si besoin, ou laisse `NODE_OPTIONS` absent pour garder le défaut image.
 - **`NODE_EXTRA_CA_CERTS`** (chemin vers un PEM) : utile pour un **CA interne** ; le code l’**ajoute** au bundle principal quand celui-ci est trouvé. Monter le fichier PEM dans le conteneur (volume) si le chemin pointe hors `/app`.
+- **Chaîne TLS incomplète côté site** (erreur *unable to verify the first certificate*) : l’ingest tente un **second appel** sans vérification du certificat tant que `LINKDUP_WEB_FETCH_TLS_RETRY_INSECURE` n’est pas `0`. Pour forcer le strict, définir `LINKDUP_WEB_FETCH_TLS_RETRY_INSECURE=0` dans `.env.production` ; en dernier recours, `LINKDUP_INSECURE_WEB_FETCH=1` sur tout l’ingest.
 - Vérification rapide après déploiement : `docker exec root-linkdup-1 sh -c 'test -f /etc/ssl/certs/ca-certificates.crt && echo bundle OK; echo NODE_OPTIONS=$NODE_OPTIONS'` (adapter le nom du conteneur).
 
 ---
