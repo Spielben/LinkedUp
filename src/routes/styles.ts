@@ -63,46 +63,43 @@ stylesRouter.post("/:id/generate", async (req, res) => {
 
   const model = "anthropic/claude-sonnet-4";
 
-  const prompt = `Tu es un expert en analyse de communication écrite et en personal branding LinkedIn.
+  const prompt = `You are an expert in written communication and LinkedIn personal branding.
 
-À partir des posts LinkedIn suivants, réalise une analyse complète du style d'écriture de l'auteur en 4 étapes.
+From the sample LinkedIn posts below, deliver a full analysis of the author's writing style in 4 steps. Write your entire response in English (even if the sample posts are in another language—analyze and describe in English).
 
 ---
 
-## Posts de l'auteur
+## Author's posts
 
 ${style.examples}
 
 ---
 
-## Étape 1 : Analyse des communications écrites
+## Step 1: Written communication analysis
 
-Analyse les exemples selon ces critères :
-- **Niveau de formalité** : décontracté, professionnel, académique...
-- **Jargon** : vocabulaire technique utilisé, termes récurrents
-- **Ton émotionnel** : optimiste, provocateur, empathique, neutre...
-- **Verbosité** : concis ou élaboré, longueur des phrases
-- **Structure des phrases** : simples, complexes, alternance...
-- **Autres caractéristiques notables** : appels à l'action, emojis, formats, etc.
+Evaluate the examples on:
+- **Formality** : casual, professional, academic, etc.
+- **Jargon** : technical vocabulary, recurring terms
+- **Emotional tone** : optimistic, provocative, empathetic, neutral, etc.
+- **Verbosity** : concise vs elaborate, sentence length
+- **Sentence structure** : simple, complex, mix, etc.
+- **Other notes** : CTAs, emojis, formatting patterns, etc.
 
-## Étape 2 : Profil du ton de voix
+## Step 2: Voice profile
 
-Rédige une description narrative détaillée du ton de voix de l'auteur.
-Inclus les thèmes récurrents identifiés dans ses posts.
+Write a detailed narrative description of the author's voice, including recurring themes in their posts.
 
-## Étape 3 : Paragraphe narratif (Clé universelle)
+## Step 3: Narrative paragraph (universal key)
 
-Rédige un paragraphe d'environ 100-150 mots qui capture parfaitement le style de l'auteur.
-Ce paragraphe doit pouvoir servir de référence pour reproduire ce ton à l'identique.
-Il doit sonner comme si l'auteur l'avait écrit lui-même.
+Write a paragraph of about 100–150 words that captures the author's style. It should be a reference to reproduce the same voice; it should read as if the author could have written it.
 
-## Étape 4 : Guide du ton de voix
+## Step 4: Voice guide
 
-Résume le tout en un guide concis et actionnable :
-- Description du ton de voix (bullet points)
-- La clé universelle de l'Étape 3
+Summarize in a concise, actionable guide:
+- Voice description (bullet points)
+- The universal key from Step 3
 
-Ce guide sera utilisé comme contexte pour la génération future de posts dans ce style.`;
+This guide will be used as context for future post generation in this style.`;
 
   try {
     const { content, usage } = await callOpenRouter({

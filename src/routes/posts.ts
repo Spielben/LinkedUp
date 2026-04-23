@@ -199,71 +199,71 @@ postsRouter.post("/:id/generate", async (req, res) => {
     ? `## Brand Identity & Tone of Voice\n\n${settings.brand_identity_text}\n\n---\n\n`
     : "";
 
-  const prompt = `Tu es un expert en création de posts LinkedIn engageants et viraux.
+  const prompt = `You are an expert at writing engaging, high-performing LinkedIn posts.
 
-Ton objectif est de rédiger 3 versions différentes d'un post LinkedIn en respectant le style d'écriture, la structure du template (si fourni), et en intégrant le contenu de référence (si fourni).
-
----
-
-${brandIdentityBlock}## Informations du post
-
-**Sujet** : ${post.subject}
-
-**Description / Instructions** :
-${post.description || "Aucune description fournie."}
+Your job is to write 3 different versions of a LinkedIn post, matching the writing style, following the template structure when provided, and using the reference content when provided. Write everything in English.
 
 ---
 
-## Style d'écriture à reproduire
+${brandIdentityBlock}## Post brief
 
-${post.style_instructions || "Aucun style défini. Utilise un ton professionnel et engageant."}
+**Subject:** ${post.subject}
 
----
-
-## Template / Structure à suivre (optionnel)
-
-${post.template_text || "Aucun template fourni. Utilise une structure engageante adaptée au sujet."}
+**Description / instructions:**
+${post.description || "None provided."}
 
 ---
 
-## Contenu de référence (optionnel)
+## Style to emulate
 
-${post.contenu_summary || post.contenu_raw || "Aucun contenu de référence fourni."}
+${post.style_instructions || "No style provided. Use a professional, engaging tone."}
 
 ---
 
-## Signature
+## Template / structure (optional)
+
+${post.template_text || "No template provided. Use an engaging structure that fits the subject."}
+
+---
+
+## Reference content (optional)
+
+${post.contenu_summary || post.contenu_raw || "No reference content provided."}
+
+---
+
+## Signature to append (if any)
 
 ${settings?.signature || ""}
 
 ---
 
-## Consignes
+## Requirements
 
-1. Génère exactement 3 versions du post, chacune avec un angle/hook différent
-2. Chaque version doit :
-   - Respecter le ton de voix décrit dans le style
-   - Suivre la structure du template si fourni
-   - Intégrer les informations clés de la description
-   - Utiliser le contenu de référence si fourni
-   - Se terminer par la signature
-3. Les 3 versions doivent être distinctes dans leur approche :
-   - V1 : Hook basé sur une question ou un problème
-   - V2 : Hook basé sur une observation ou une analyse
-   - V3 : Hook basé sur des chiffres, secrets ou une liste
-4. Format LinkedIn : phrases courtes, sauts de ligne fréquents, emojis si le style le permet
-5. Longueur : 600-900 caractères par version
+1. Generate exactly 3 post versions, each with a different angle or hook
+2. Each version must:
+   - Match the voice described in the style
+   - Follow the template structure when a template is provided
+   - Use the key points from the description
+   - Use the reference content when provided
+   - End with the signature when a signature is provided
+3. The 3 versions must differ in approach:
+   - V1: Hook with a question or a problem
+   - V2: Hook with an observation or analysis
+   - V3: Hook with numbers, a contrarian angle, or a list
+4. LinkedIn style: short lines, line breaks, emojis if the style allows
+5. Length: about 600–900 characters per version
 
-Retourne le résultat dans ce format exact :
+Return the result in this exact format:
 
 V1:
-[contenu de la version 1]
+[version 1 content]
 
 V2:
-[contenu de la version 2]
+[version 2 content]
 
 V3:
-[contenu de la version 3]`;
+[version 3 content]`;
 
   try {
     const { content, usage } = await callOpenRouter({
@@ -334,39 +334,39 @@ postsRouter.post("/:id/optimize", async (req, res) => {
 
   const model = (post.model as string) || "anthropic/claude-sonnet-4";
 
-  const prompt = `Tu es un expert en optimisation de posts LinkedIn.
+  const prompt = `You are an expert at optimizing LinkedIn posts.
 
-Optimise le post suivant en appliquant les instructions d'optimisation tout en préservant le ton de voix de l'auteur.
+Refine the post below using the optimization instructions while preserving the author's voice. Output in English.
 
 ---
 
-## Post actuel
+## Current post
 
 ${post.final_version}
 
 ---
 
-## Instructions d'optimisation
+## Optimization instructions
 
 ${post.optimization_instructions}
 
 ---
 
-## Style d'écriture à respecter
+## Writing style to preserve
 
-${post.style_instructions || "Aucun style défini."}
+${post.style_instructions || "No specific style provided."}
 
 ---
 
-## Consignes
+## Rules
 
-1. Applique les instructions d'optimisation au post
-2. Conserve le ton de voix et le style d'écriture
-3. Maintiens la structure générale du post
-4. Garde la même longueur approximative
-5. Ne change pas la signature
+1. Apply the optimization instructions to the post
+2. Keep the same voice and writing style
+3. Keep the overall structure
+4. Stay roughly the same length
+5. Do not change the signature
 
-Retourne uniquement le post optimisé, sans commentaire ni explication.`;
+Return only the optimized post, with no comments or meta-explanation.`;
 
   try {
     const { content, usage } = await callOpenRouter({
