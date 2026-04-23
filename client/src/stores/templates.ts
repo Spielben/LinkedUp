@@ -14,7 +14,7 @@ export interface Template {
   likes: number;
   comments: number;
   shares: number;
-  impressions: number;
+  impressions?: number;
   publication_date: string | null;
   created_at: string;
 }

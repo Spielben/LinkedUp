@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTemplatesStore } from "../stores/templates";
 import { importFile } from "../lib/import-file";
+import { formatCompactInt } from "../lib/formatMetrics";
 
 const categoryColors: Record<string, string> = {
   "Lead Magnet": "bg-purple-100 text-purple-800",
@@ -15,8 +16,17 @@ export function TemplatesList() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    name: "", description: "", author: "", category: "Business",
-    linkedin_post_url: "", example_text: "", template_text: "",
+    name: "",
+    description: "",
+    author: "",
+    category: "Business",
+    linkedin_post_url: "",
+    example_text: "",
+    template_text: "",
+    impressions: 0,
+    comments: 0,
+    shares: 0,
+    likes: 0,
   });
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -38,7 +48,19 @@ export function TemplatesList() {
     e.preventDefault();
     if (!formData.name.trim()) return;
     await createTemplate(formData);
-    setFormData({ name: "", description: "", author: "", category: "Business", linkedin_post_url: "", example_text: "", template_text: "" });
+    setFormData({
+      name: "",
+      description: "",
+      author: "",
+      category: "Business",
+      linkedin_post_url: "",
+      example_text: "",
+      template_text: "",
+      impressions: 0,
+      comments: 0,
+      shares: 0,
+      likes: 0,
+    });
     setShowForm(false);
   };
 
@@ -185,9 +207,76 @@ export function TemplatesList() {
               <p className="text-xs text-gray-400 mb-1">The skeleton with placeholders — e.g. "[Hook]\n\n[3 key points]\n\n[CTA]". This is what the AI will follow to structure each post.</p>
               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" rows={3} value={formData.template_text} onChange={(e) => setFormData({ ...formData, template_text: e.target.value })} />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn metrics (optional)</label>
+              <p className="text-xs text-gray-400 mb-2">Shown next to the title in the post editor template menu (impressions, replies, reposts). Likes kept for reference.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div>
+                  <label className="text-[11px] text-gray-500">Impressions</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                    value={formData.impressions}
+                    onChange={(e) => setFormData({ ...formData, impressions: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-500">Replies</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                    value={formData.comments}
+                    onChange={(e) => setFormData({ ...formData, comments: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-500">Reposts</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                    value={formData.shares}
+                    onChange={(e) => setFormData({ ...formData, shares: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-500">Likes</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                    value={formData.likes}
+                    onChange={(e) => setFormData({ ...formData, likes: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                  />
+                </div>
+              </div>
+            </div>
             <div className="flex gap-2">
               <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Create</button>
-              <button type="button" onClick={() => { setShowForm(false); setFormData({ name: "", description: "", author: "", category: "Business", linkedin_post_url: "", example_text: "", template_text: "" }); }} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">Cancel</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  setFormData({
+                    name: "",
+                    description: "",
+                    author: "",
+                    category: "Business",
+                    linkedin_post_url: "",
+                    example_text: "",
+                    template_text: "",
+                    impressions: 0,
+                    comments: 0,
+                    shares: 0,
+                    likes: 0,
+                  });
+                }}
+                className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300"
+              >
+                Cancel
+              </button>
             </div>
           </form>
         </div>
@@ -216,9 +305,10 @@ export function TemplatesList() {
                   </span>
                 )}
                 <p className="text-xs text-gray-500 mt-2">{t.author || "Unknown"}</p>
-                <div className="flex gap-3 text-xs text-gray-400 mt-2">
-                  <span>{t.likes} likes</span>
-                  <span>{t.comments} comments</span>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mt-2 font-medium">
+                  <span title="Impressions">{formatCompactInt(t.impressions ?? 0)} imp</span>
+                  <span title="Replies (comments)">{formatCompactInt(t.comments ?? 0)} replies</span>
+                  <span title="Reposts (shares)">{formatCompactInt(t.shares ?? 0)} reposts</span>
                 </div>
                 {expandedId === t.id && (
                   <div className="mt-4 pt-4 border-t space-y-3">
@@ -264,7 +354,10 @@ export function TemplatesList() {
                       {t.category}
                     </span>
                   )}
-                  <span className="text-xs text-gray-400">{t.likes} likes</span>
+                  <div className="flex flex-col items-end gap-0.5 text-[11px] text-gray-600 text-right max-w-[14rem]">
+                    <span>{formatCompactInt(t.impressions ?? 0)} imp</span>
+                    <span>{formatCompactInt(t.comments ?? 0)} replies · {formatCompactInt(t.shares ?? 0)} reposts</span>
+                  </div>
                   <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }} className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg">
                     Delete
                   </button>

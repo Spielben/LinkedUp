@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useContenusStore } from "../stores/contenus";
 import { importFile } from "../lib/import-file";
 import { apiFetch } from "../lib/api";
+import { CONTENT_CATEGORIES, UNCLASSIFIED_LABEL } from "../lib/categories";
 
 async function errorMessageFromResponse(res: Response): Promise<string> {
   const text = await res.text();
@@ -16,13 +17,37 @@ async function errorMessageFromResponse(res: Response): Promise<string> {
   return res.statusText || `Request failed (${res.status})`;
 }
 
+const categoryColors: Record<string, string> = {
+  "Lead Magnet": "bg-purple-100 text-purple-800",
+  Storytelling: "bg-orange-100 text-orange-800",
+  Hacks: "bg-cyan-100 text-cyan-800",
+  Business: "bg-blue-100 text-blue-800",
+  Actu: "bg-green-100 text-green-800",
+  [UNCLASSIFIED_LABEL]: "bg-gray-100 text-gray-700",
+};
+
 export function ContenusList() {
-  const { contenus, loading, fetch: fetchContenus, create: createContenu, remove: deleteContenu } = useContenusStore();
+  const {
+    contenus,
+    loading,
+    fetch: fetchContenus,
+    create: createContenu,
+    update: updateContenu,
+    remove: deleteContenu,
+  } = useContenusStore();
   const [ingestingId, setIngestingId] = useState<number | null>(null);
   const [ingestError, setIngestError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", description: "", url: "", type: "Web", file: null as File | null });
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    category: "Business",
+    url: "",
+    type: "Web",
+    file: null as File | null,
+  });
+  const [filterCategory, setFilterCategory] = useState<string>("all");
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -62,6 +87,7 @@ export function ContenusList() {
         const fd = new FormData();
         fd.append("name", formData.name);
         fd.append("description", formData.description);
+        fd.append("category", formData.category);
         fd.append("type", formData.type);
         fd.append("file", formData.file);
 
@@ -72,9 +98,15 @@ export function ContenusList() {
         }
         await fetchContenus();
       } else {
-        await createContenu({ name: formData.name, description: formData.description, url: formData.url, type: formData.type });
+        await createContenu({
+          name: formData.name,
+          description: formData.description,
+          category: formData.category,
+          url: formData.url,
+          type: formData.type,
+        });
       }
-      setFormData({ name: "", description: "", url: "", type: "Web", file: null });
+      setFormData({ name: "", description: "", category: "Business", url: "", type: "Web", file: null });
       setShowForm(false);
     } catch (err: unknown) {
       setIngestError(err instanceof Error ? err.message : String(err));
@@ -100,6 +132,12 @@ export function ContenusList() {
       setImporting(false);
     }
   };
+
+  const filteredContenus = useMemo(() => {
+    if (filterCategory === "all") return contenus;
+    if (filterCategory === UNCLASSIFIED_LABEL) return contenus.filter((c) => !c.category?.trim());
+    return contenus.filter((c) => c.category === filterCategory);
+  }, [contenus, filterCategory]);
 
   const typeColors: Record<string, string> = {
     YouTube: "bg-red-100 text-red-800",
@@ -161,6 +199,41 @@ export function ContenusList() {
         </div>
       )}
 
+      {!loading && contenus.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setFilterCategory("all")}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              filterCategory === "all" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            All
+          </button>
+          {CONTENT_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setFilterCategory(cat)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                filterCategory === cat ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setFilterCategory(UNCLASSIFIED_LABEL)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              filterCategory === UNCLASSIFIED_LABEL ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {UNCLASSIFIED_LABEL}
+          </button>
+        </div>
+      )}
+
       {showForm && (
         <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
           <h3 className="font-medium mb-1">Create New Content</h3>
@@ -175,6 +248,21 @@ export function ContenusList() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <p className="text-xs text-gray-400 mb-1">Optional note to remind you what this source covers or why you added it.</p>
               <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <p className="text-xs text-gray-400 mb-1">Same labels as templates — used to filter and group in the post editor.</p>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              >
+                {CONTENT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -209,7 +297,16 @@ export function ContenusList() {
             </div>
             <div className="flex gap-2">
               <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Create</button>
-              <button type="button" onClick={() => { setShowForm(false); setFormData({ name: "", description: "", url: "", type: "Web", file: null }); }} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">Cancel</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  setFormData({ name: "", description: "", category: "Business", url: "", type: "Web", file: null });
+                }}
+                className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300"
+              >
+                Cancel
+              </button>
             </div>
           </form>
         </div>
@@ -219,6 +316,8 @@ export function ContenusList() {
         <p className="text-gray-400">Loading...</p>
       ) : contenus.length === 0 ? (
         <p className="text-gray-500">No content sources yet. Import a CSV/JSON or create one.</p>
+      ) : filteredContenus.length === 0 ? (
+        <p className="text-gray-500">No content in this category. Choose &quot;All&quot; or pick another filter.</p>
       ) : (
         <>
           {ingestError && (
@@ -231,7 +330,7 @@ export function ContenusList() {
             ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"
             : "grid gap-2 md:gap-3 w-full min-w-0"
           }>
-            {contenus.map((c) => (
+            {filteredContenus.map((c) => (
               <div
                 key={c.id}
                 className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 cursor-pointer hover:border-blue-200 transition w-full min-w-0 max-w-full overflow-hidden box-border"
@@ -267,6 +366,15 @@ export function ContenusList() {
                 {/* Footer: badges then actions — stacked on narrow screens */}
                 <div className="mt-2 pt-2 border-t border-gray-100 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                   <div className="flex flex-wrap gap-2 min-w-0">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                        c.category?.trim()
+                          ? categoryColors[c.category] || "bg-gray-100 text-gray-800"
+                          : categoryColors[UNCLASSIFIED_LABEL]
+                      }`}
+                    >
+                      {c.category?.trim() || UNCLASSIFIED_LABEL}
+                    </span>
                     {c.type && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${typeColors[c.type] || "bg-gray-100 text-gray-800"}`}>
                         {c.type}
@@ -301,6 +409,25 @@ export function ContenusList() {
 
                 {expandedId === c.id && (
                   <div className="mt-3 pt-3 border-t space-y-2">
+                    <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-xs font-medium text-gray-600">Category</span>
+                      <select
+                        className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 max-w-full"
+                        value={c.category || ""}
+                        onChange={async (e) => {
+                          const v = e.target.value.trim() || null;
+                          await updateContenu(c.id, { category: v });
+                          await fetchContenus();
+                        }}
+                      >
+                        <option value="">{UNCLASSIFIED_LABEL}</option>
+                        {CONTENT_CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     {c.content_raw && (
                       <div>
                         <p className="text-xs font-medium text-gray-600 mb-1">Raw content:</p>

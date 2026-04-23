@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { usePostsStore, type Post } from "../stores/posts";
 import { useStylesStore } from "../stores/styles";
@@ -12,6 +12,8 @@ import {
   mediaRowsFromPost,
   persistMediaPayload,
 } from "../lib/post-media";
+import { UNCLASSIFIED_LABEL, compareCategoryGroup } from "../lib/categories";
+import { formatContenuOptionLine, formatTemplateOptionLine } from "../lib/formatMetrics";
 
 const STATUS_OPTIONS = ["Idea", "Draft", "Scheduled", "Published"];
 const VERSION_OPTIONS = ["V1", "V2", "V3"];
@@ -323,6 +325,34 @@ export function PostDetail() {
   useEffect(() => {
     if (post) setMediaRows(mediaRowsFromPost(post));
   }, [post?.id, post?.media_json, post?.image_path]);
+
+  const templateOptionGroups = useMemo(() => {
+    const m = new Map<string, typeof templates>();
+    for (const t of templates) {
+      const g = t.category?.trim() || UNCLASSIFIED_LABEL;
+      if (!m.has(g)) m.set(g, []);
+      m.get(g)!.push(t);
+    }
+    const keys = [...m.keys()].sort(compareCategoryGroup);
+    return keys.map((label) => ({
+      label,
+      items: (m.get(label) ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+  }, [templates]);
+
+  const contenuOptionGroups = useMemo(() => {
+    const m = new Map<string, typeof contenus>();
+    for (const c of contenus) {
+      const g = c.category?.trim() || UNCLASSIFIED_LABEL;
+      if (!m.has(g)) m.set(g, []);
+      m.get(g)!.push(c);
+    }
+    const keys = [...m.keys()].sort(compareCategoryGroup);
+    return keys.map((label) => ({
+      label,
+      items: (m.get(label) ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+  }, [contenus]);
 
   if (!post) return <p className="text-gray-400">Loading...</p>;
 
@@ -725,25 +755,47 @@ export function PostDetail() {
 
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Template</label>
+              <p className="text-[11px] text-gray-400 mb-1">
+                Grouped by category. Each line shows impressions, replies, and reposts (LinkedIn metrics).
+              </p>
               <select
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                className="w-full min-w-0 border border-gray-300 rounded px-2 py-1.5 text-sm"
                 value={post.template_id || ""}
                 onChange={(e) => { const v = e.target.value ? Number(e.target.value) : null; save({ template_id: v }); }}
               >
                 <option value="">None</option>
-                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {templateOptionGroups.map(({ label, items }) => (
+                  <optgroup key={label} label={label}>
+                    {items.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {formatTemplateOptionLine(t)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Content source</label>
+              <p className="text-[11px] text-gray-400 mb-1">
+                Grouped by content category (same labels as templates: Business, Storytelling, etc.).
+              </p>
               <select
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                className="w-full min-w-0 border border-gray-300 rounded px-2 py-1.5 text-sm"
                 value={post.contenu_id || ""}
                 onChange={(e) => { const v = e.target.value ? Number(e.target.value) : null; save({ contenu_id: v }); }}
               >
                 <option value="">None</option>
-                {contenus.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {contenuOptionGroups.map(({ label, items }) => (
+                  <optgroup key={label} label={label}>
+                    {items.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {formatContenuOptionLine(c)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
 
