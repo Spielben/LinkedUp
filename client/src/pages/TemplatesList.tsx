@@ -23,7 +23,6 @@ export function TemplatesList() {
     linkedin_post_url: "",
     example_text: "",
     template_text: "",
-    impressions: 0,
     comments: 0,
     shares: 0,
     likes: 0,
@@ -56,7 +55,6 @@ export function TemplatesList() {
       linkedin_post_url: "",
       example_text: "",
       template_text: "",
-      impressions: 0,
       comments: 0,
       shares: 0,
       likes: 0,
@@ -208,21 +206,24 @@ export function TemplatesList() {
               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" rows={3} value={formData.template_text} onChange={(e) => setFormData({ ...formData, template_text: e.target.value })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn metrics (optional)</label>
-              <p className="text-xs text-gray-400 mb-2">Shown next to the title in the post editor template menu (impressions, replies, reposts). Likes kept for reference.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Métriques LinkedIn (optionnel)</label>
+              <p className="text-xs text-gray-400 mb-2">
+                Affichées à côté du nom dans le menu template (J&apos;aime, commentaires, partages). Données saisies ou
+                import CSV — pas de récupération auto depuis LinkedIn.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div>
-                  <label className="text-[11px] text-gray-500">Impressions</label>
+                  <label className="text-[11px] text-gray-500">J&apos;aime</label>
                   <input
                     type="number"
                     min={0}
                     className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-                    value={formData.impressions}
-                    onChange={(e) => setFormData({ ...formData, impressions: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                    value={formData.likes}
+                    onChange={(e) => setFormData({ ...formData, likes: Math.max(0, parseInt(e.target.value, 10) || 0) })}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-gray-500">Replies</label>
+                  <label className="text-[11px] text-gray-500">Commentaires</label>
                   <input
                     type="number"
                     min={0}
@@ -232,23 +233,13 @@ export function TemplatesList() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-gray-500">Reposts</label>
+                  <label className="text-[11px] text-gray-500">Partages</label>
                   <input
                     type="number"
                     min={0}
                     className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
                     value={formData.shares}
                     onChange={(e) => setFormData({ ...formData, shares: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-gray-500">Likes</label>
-                  <input
-                    type="number"
-                    min={0}
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-                    value={formData.likes}
-                    onChange={(e) => setFormData({ ...formData, likes: Math.max(0, parseInt(e.target.value, 10) || 0) })}
                   />
                 </div>
               </div>
@@ -267,7 +258,6 @@ export function TemplatesList() {
                     linkedin_post_url: "",
                     example_text: "",
                     template_text: "",
-                    impressions: 0,
                     comments: 0,
                     shares: 0,
                     likes: 0,
@@ -305,11 +295,10 @@ export function TemplatesList() {
                   </span>
                 )}
                 <p className="text-xs text-gray-500 mt-2">{t.author || "Unknown"}</p>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mt-2 font-medium">
-                  <span title="Impressions">{formatCompactInt(t.impressions ?? 0)} imp</span>
-                  <span title="Replies (comments)">{formatCompactInt(t.comments ?? 0)} replies</span>
-                  <span title="Reposts (shares)">{formatCompactInt(t.shares ?? 0)} reposts</span>
-                </div>
+                <p className="text-xs text-gray-500 mt-2 font-medium leading-snug">
+                  {formatCompactInt(t.likes ?? 0)} J&apos;aime · {formatCompactInt(t.comments ?? 0)} commentaires ·{" "}
+                  {formatCompactInt(t.shares ?? 0)} partages
+                </p>
                 {expandedId === t.id && (
                   <div className="mt-4 pt-4 border-t space-y-3">
                     {t.example_text && (
@@ -354,10 +343,10 @@ export function TemplatesList() {
                       {t.category}
                     </span>
                   )}
-                  <div className="flex flex-col items-end gap-0.5 text-[11px] text-gray-600 text-right max-w-[14rem]">
-                    <span>{formatCompactInt(t.impressions ?? 0)} imp</span>
-                    <span>{formatCompactInt(t.comments ?? 0)} replies · {formatCompactInt(t.shares ?? 0)} reposts</span>
-                  </div>
+                  <p className="text-[11px] text-gray-600 text-right max-w-[18rem] leading-tight">
+                    {formatCompactInt(t.likes ?? 0)} J&apos;aime · {formatCompactInt(t.comments ?? 0)} commentaires ·{" "}
+                    {formatCompactInt(t.shares ?? 0)} partages
+                  </p>
                   <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }} className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg">
                     Delete
                   </button>

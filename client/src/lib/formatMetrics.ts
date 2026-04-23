@@ -8,12 +8,12 @@ export function formatCompactInt(n: number): string {
   return String(x);
 }
 
-/** One line for native &lt;option&gt; labels: title + visible LinkedIn-style metrics */
+/** One line for native &lt;option&gt; labels: titre + J'aime, commentaires, partages (données import / saisie) */
 export function formatTemplateOptionLine(t: Template): string {
-  const imp = formatCompactInt(t.impressions ?? 0);
-  const replies = formatCompactInt(t.comments ?? 0);
-  const reposts = formatCompactInt(t.shares ?? 0);
-  return `${t.name}  ·  ${imp} imp · ${replies} replies · ${reposts} reposts`;
+  const jAime = formatCompactInt(t.likes ?? 0);
+  const commentaires = formatCompactInt(t.comments ?? 0);
+  const partages = formatCompactInt(t.shares ?? 0);
+  return `${t.name}  ·  ${jAime} J'aime · ${commentaires} commentaires · ${partages} partages`;
 }
 
 export function contenuGroupLabel(c: { category: string | null }): string {

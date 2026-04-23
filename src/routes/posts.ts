@@ -9,11 +9,30 @@ import { getPostMediaSources, resolveAllMediaSources } from "../services/post-me
 
 export const postsRouter = Router();
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Remove one or more trailing copies of the signature (handles duplicate AI output + our own appends). */
+function stripTrailingSignatures(text: string, signature: string): string {
+  const sig = signature.trim();
+  if (!sig) return text;
+  let t = text.trimEnd();
+  for (let i = 0; i < 30; i++) {
+    const re = new RegExp(`(?:\\n{1,2})?${escapeRegExp(sig)}\\s*$`, "u");
+    const next = t.replace(re, "").trimEnd();
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+
 function ensureSignature(text: string, signature: string | null | undefined): string {
   if (!signature?.trim()) return text;
   const sig = signature.trim();
-  if (text.trim().endsWith(sig)) return text;
-  return `${text.trimEnd()}\n\n${sig}`;
+  const cleaned = stripTrailingSignatures(text, sig);
+  if (!cleaned.trim()) return sig;
+  return `${cleaned.trimEnd()}\n\n${sig}`;
 }
 
 /** Text to publish: edited final, or the selected V1/V2/V3 body — never the label "V1" etc. */
@@ -235,9 +254,9 @@ ${post.contenu_summary || post.contenu_raw || "Aucun contenu de référence four
 
 ---
 
-## Signature
+## Signature (référence uniquement — ne pas la recopier dans V1, V2 ou V3)
 
-${settings?.signature || ""}
+${settings?.signature || "Aucune."}
 
 ---
 
@@ -249,7 +268,7 @@ ${settings?.signature || ""}
    - Suivre la structure du template si fourni
    - Intégrer les informations clés de la description
    - Utiliser le contenu de référence si fourni
-   - Se terminer par la signature si fournie
+   - **Ne pas** inclure la signature dans le texte des versions — elle est ajoutée automatiquement après génération
 3. Les 3 versions doivent être distinctes :
    - V1 : accroche par une question ou un problème
    - V2 : accroche par une observation ou une analyse
@@ -300,9 +319,9 @@ ${post.contenu_summary || post.contenu_raw || "No reference content provided."}
 
 ---
 
-## Signature to append (if any)
+## Signature (reference only — do not paste into V1, V2, or V3)
 
-${settings?.signature || ""}
+${settings?.signature || "None."}
 
 ---
 
@@ -314,7 +333,7 @@ ${settings?.signature || ""}
    - Follow the template structure when a template is provided
    - Use the key points from the description
    - Use the reference content when provided
-   - End with the signature when a signature is provided
+   - **Do not** include the signature in the body of any version — the app appends it automatically after generation
 3. The 3 versions must differ in approach:
    - V1: Hook with a question or a problem
    - V2: Hook with an observation or analysis
@@ -436,7 +455,7 @@ ${post.style_instructions || "Aucun style défini."}
 2. Conserve le ton de voix et le style d'écriture
 3. Maintiens la structure générale du post
 4. Garde la même longueur approximative
-5. Ne change pas la signature
+5. Ne duplique pas la signature : le post peut déjà se terminer par la signature — garde une seule occurrence en fin de texte.
 
 Retourne uniquement le post optimisé, sans commentaire ni explication.`
     : `You are an expert at optimizing LinkedIn posts.
@@ -469,7 +488,7 @@ ${post.style_instructions || "No specific style provided."}
 2. Keep the same voice and writing style
 3. Keep the overall structure
 4. Stay roughly the same length
-5. Do not change the signature
+5. Do not duplicate the signature: the post may already end with it — keep exactly one signature block at the end.
 
 Return only the optimized post, with no comments or meta-explanation.`;
 

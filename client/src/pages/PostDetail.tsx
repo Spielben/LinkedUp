@@ -756,7 +756,8 @@ export function PostDetail() {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Template</label>
               <p className="text-[11px] text-gray-400 mb-1">
-                Grouped by category. Each line shows impressions, replies, and reposts (LinkedIn metrics).
+                Par catégorie. Chaque ligne affiche : J&apos;aime, commentaires, partages (import ou saisie — pas de stats
+                LinkedIn en direct).
               </p>
               <select
                 className="w-full min-w-0 border border-gray-300 rounded px-2 py-1.5 text-sm"
