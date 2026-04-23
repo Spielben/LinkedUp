@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import type { ConnectionOptions } from "node:tls";
 import { Agent, fetch as undiciFetch } from "undici";
 import mammoth from "mammoth";
 
@@ -110,13 +111,57 @@ const WEB_FETCH_TIMEOUT_MS = 45_000;
 /** When "1", skip TLS certificate verification for web ingest only (self-hosted; MITM risk on untrusted networks). */
 const WEB_FETCH_TLS_INSECURE = process.env.LINKDUP_INSECURE_WEB_FETCH === "1";
 
-let insecureWebAgent: Agent | undefined;
-function getWebFetchDispatcher(): Agent | undefined {
-  if (!WEB_FETCH_TLS_INSECURE) return undefined;
-  if (!insecureWebAgent) {
-    insecureWebAgent = new Agent({ connect: { rejectUnauthorized: false } });
+const SYSTEM_CA_BUNDLE_CANDIDATES = [
+  "/etc/ssl/certs/ca-certificates.crt",
+  "/etc/pki/tls/certs/ca-bundle.crt",
+] as const;
+
+/** System / env PEM bundles for undici (does not depend on NODE_OPTIONS=--use-openssl-ca). */
+function loadWebFetchTlsConnectOptions(): ConnectionOptions | undefined {
+  const chunks: Buffer[] = [];
+  function tryAddFile(p: string): void {
+    if (!p || !existsSync(p)) return;
+    try {
+      const buf = readFileSync(p);
+      if (buf.length > 0) chunks.push(buf);
+    } catch {
+      // ignore
+    }
   }
-  return insecureWebAgent;
+  if (process.env.SSL_CERT_FILE?.trim()) {
+    tryAddFile(process.env.SSL_CERT_FILE.trim());
+  }
+  if (chunks.length === 0) {
+    for (const p of SYSTEM_CA_BUNDLE_CANDIDATES) {
+      tryAddFile(p);
+      if (chunks.length > 0) break;
+    }
+  }
+  // Append corporate / custom CA to the main bundle; if no main bundle, rely on default TLS + NODE_EXTRA_CA_CERTS on the process
+  if (chunks.length > 0 && process.env.NODE_EXTRA_CA_CERTS?.trim()) {
+    tryAddFile(process.env.NODE_EXTRA_CA_CERTS.trim());
+  }
+  if (chunks.length === 0) return undefined;
+  const ca: Buffer | Buffer[] = chunks.length === 1 ? chunks[0]! : chunks;
+  return { ca, rejectUnauthorized: true };
+}
+
+let webIngestUndiciAgent: Agent | undefined;
+let insecureWebAgent: Agent | undefined;
+
+/** Undici pool for `fetchWebContent` — explicit OS CA in Docker, default Node trust store locally when no bundle file. */
+function getWebIngestUndiciAgent(): Agent {
+  if (WEB_FETCH_TLS_INSECURE) {
+    if (!insecureWebAgent) {
+      insecureWebAgent = new Agent({ connect: { rejectUnauthorized: false } });
+    }
+    return insecureWebAgent;
+  }
+  if (!webIngestUndiciAgent) {
+    const connect = loadWebFetchTlsConnectOptions();
+    webIngestUndiciAgent = connect ? new Agent({ connect }) : new Agent();
+  }
+  return webIngestUndiciAgent;
 }
 
 const BROWSER_USER_AGENT =
@@ -199,9 +244,9 @@ function maybeAppendTlsHint(message: string): string {
   ) {
     return (
       message +
-      " — Avec l’image Docker à jour, les CA système devraient suffire. " +
-      "Dernier recours (site dont la chaîne TLS est défectueuse) : " +
-      "LINKDUP_INSECURE_WEB_FETCH=1 dans .env.production puis redémarrer le conteneur (désactive la vérification TLS, risque MITM)."
+      " — L'ingest charge les CA du système (fichier conteneur) sans dépendre de NODE_OPTIONS. " +
+      "Si le site ne renvoie qu'une chaîne TLS incomplète, l'erreur peut rester. " +
+      "Dernier recours : LINKDUP_INSECURE_WEB_FETCH=1 dans .env.production puis redémarrer (désactive la vérification TLS, risque MITM)."
     );
   }
   return message;
@@ -230,14 +275,14 @@ export async function fetchWebContent(url: string): Promise<string> {
   assertPublicHttpUrl(finalUrl);
 
   const signal = AbortSignal.timeout(WEB_FETCH_TIMEOUT_MS);
-  const dispatcher = getWebFetchDispatcher();
+  const dispatcher = getWebIngestUndiciAgent();
   type UndiciRes = Awaited<ReturnType<typeof undiciFetch>>;
   let response: UndiciRes;
   try {
     response = await undiciFetch(targetUrl, {
       headers: WEB_FETCH_HEADERS,
       signal,
-      ...(dispatcher ? { dispatcher } : {}),
+      dispatcher,
     });
   } catch (err) {
     throw new Error(formatFetchNetworkError(err));

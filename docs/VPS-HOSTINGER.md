@@ -40,6 +40,13 @@ chmod 600 .env.production
 
 Renseigner les clés (tableaux de bord des fournisseurs, hors terminal). **`LINKEDIN_REDIRECT_URI`** doit correspondre **exactement** à l’URL autorisée dans l’app LinkedIn Developers (HTTPS + chemin `/api/linkedin/callback`). Voir `.env.production.example` dans le dépôt.
 
+### TLS / ingest web (HTTPS sortant)
+
+- L’image charge `ca-certificates` ; l’app d’ingest lit explicitement le bundle système (ex. `/etc/ssl/certs/ca-certificates.crt` dans le conteneur) pour `undici`, **sans** dépendre d’un `NODE_OPTIONS` correct.
+- Si tu ajoutes **`NODE_OPTIONS`** dans `.env.production`, tu **remplaces** entièrement la variable d’environnement du conteneur (y compris `--use-openssl-ca` défini dans le `Dockerfile`) : fusionne les flags si besoin, ou laisse `NODE_OPTIONS` absent pour garder le défaut image.
+- **`NODE_EXTRA_CA_CERTS`** (chemin vers un PEM) : utile pour un **CA interne** ; le code l’**ajoute** au bundle principal quand celui-ci est trouvé. Monter le fichier PEM dans le conteneur (volume) si le chemin pointe hors `/app`.
+- Vérification rapide après déploiement : `docker exec root-linkdup-1 sh -c 'test -f /etc/ssl/certs/ca-certificates.crt && echo bundle OK; echo NODE_OPTIONS=$NODE_OPTIONS'` (adapter le nom du conteneur).
+
 ---
 
 ## 3. Service `linkdup` dans Compose
