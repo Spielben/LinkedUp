@@ -23,6 +23,8 @@ export interface Post {
   style_id: number | null;
   template_id: number | null;
   contenu_id: number | null;
+  contenu_ids?: number[];
+  contenu_names?: string[];
   likes: number;
   impressions: number;
   comments: number;

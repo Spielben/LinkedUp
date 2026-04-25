@@ -82,6 +82,15 @@ CREATE TABLE IF NOT EXISTS posts (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS post_contenus (
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  slot INTEGER NOT NULL CHECK (slot IN (1, 2)),
+  contenu_id INTEGER NOT NULL REFERENCES contenus(id) ON DELETE CASCADE,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (post_id, slot),
+  UNIQUE (post_id, contenu_id)
+);
+
 CREATE TABLE IF NOT EXISTS token_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id INTEGER REFERENCES posts(id),

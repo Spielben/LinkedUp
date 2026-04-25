@@ -169,6 +169,14 @@ function hasPublishableBody(p: Post): boolean {
   return false;
 }
 
+function getSelectedContenuIds(post: Post): number[] {
+  if (Array.isArray(post.contenu_ids) && post.contenu_ids.length > 0) {
+    return post.contenu_ids.filter((id): id is number => Number.isInteger(id));
+  }
+  if (post.contenu_id && Number.isInteger(post.contenu_id)) return [post.contenu_id];
+  return [];
+}
+
 /** Datetime-local input (heure locale) → UTC stocké en base SQLite */
 /**
  * Convertit une saisie datetime-local (heure dans `timezone`) → UTC pour SQLite.
@@ -355,6 +363,7 @@ export function PostDetail() {
   }, [contenus]);
 
   if (!post) return <p className="text-gray-400">Loading...</p>;
+  const selectedContenuIds = getSelectedContenuIds(post);
 
   const isActuallyPublished =
     !!post.linkedin_post_url?.trim() && PUBLISHED_STATUSES.has(post.status);
@@ -495,6 +504,29 @@ export function PostDetail() {
       setPublishError(err instanceof Error ? err.message : String(err));
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleDetachLinkedIn = async () => {
+    setPublishError(null);
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/posts/${post.id}/detach-linkedin`, { method: "POST" });
+      const data = await readApiJson<Post & { error?: string }>(res);
+      if (!res.ok) {
+        setPublishError(data.error || "Failed to detach LinkedIn link");
+        return;
+      }
+      setPost(data);
+      setIsEditMode(true);
+      await fetchPosts();
+      showToast("LinkedIn link detached ✓");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPublishError(msg);
+      showToast(msg, "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -778,20 +810,55 @@ export function PostDetail() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Content source</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Content source #1</label>
               <p className="text-[11px] text-gray-400 mb-1">
-                Grouped by content category (same labels as templates: Business, Storytelling, etc.).
+                Choose up to 2 references. Generation uses both, in order.
               </p>
               <select
                 className="w-full min-w-0 border border-gray-300 rounded px-2 py-1.5 text-sm"
-                value={post.contenu_id || ""}
-                onChange={(e) => { const v = e.target.value ? Number(e.target.value) : null; save({ contenu_id: v }); }}
+                value={selectedContenuIds[0] ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value ? Number(e.target.value) : null;
+                  const next = [v, selectedContenuIds[1] ?? null]
+                    .filter((id): id is number => !!id)
+                    .filter((id, idx, arr) => arr.indexOf(id) === idx)
+                    .slice(0, 2);
+                  void save({ contenu_ids: next, contenu_id: next[0] ?? null });
+                }}
               >
                 <option value="">None</option>
                 {contenuOptionGroups.map(({ label, items }) => (
                   <optgroup key={label} label={label}>
                     {items.map((c) => (
                       <option key={c.id} value={c.id}>
+                        {formatContenuOptionLine(c)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Content source #2 (optional)</label>
+              <select
+                className="w-full min-w-0 border border-gray-300 rounded px-2 py-1.5 text-sm"
+                value={selectedContenuIds[1] ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value ? Number(e.target.value) : null;
+                  const first = selectedContenuIds[0] ?? null;
+                  const next = [first, v]
+                    .filter((id): id is number => !!id)
+                    .filter((id, idx, arr) => arr.indexOf(id) === idx)
+                    .slice(0, 2);
+                  void save({ contenu_ids: next, contenu_id: next[0] ?? null });
+                }}
+              >
+                <option value="">None</option>
+                {contenuOptionGroups.map(({ label, items }) => (
+                  <optgroup key={`secondary-${label}`} label={label}>
+                    {items.map((c) => (
+                      <option key={c.id} value={c.id} disabled={selectedContenuIds[0] === c.id}>
                         {formatContenuOptionLine(c)}
                       </option>
                     ))}
@@ -1086,15 +1153,10 @@ export function PostDetail() {
               </div>
               <button
                 type="button"
-                onClick={() =>
-                  void save(
-                    { linkedin_post_url: null, linkedin_post_id: null, status: "Draft" },
-                    { successMessage: "Post mis à jour \u2713" }
-                  )
-                }
+                onClick={() => void handleDetachLinkedIn()}
                 className="text-xs text-gray-500 hover:text-red-600 underline"
               >
-                Reset and republish
+                Detach LinkedIn link
               </button>
             </div>
           ) : (

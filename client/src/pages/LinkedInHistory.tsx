@@ -133,6 +133,16 @@ export function LinkedInHistory() {
     draft: scrapedUnified.filter((p) => p.status === "draft").length,
     idea: scrapedUnified.filter((p) => p.status === "idea").length,
   };
+  const linkdupPublishedCount = linkdupUnified.length;
+  const showsScrapedOnly = filterStatus === "draft" || filterStatus === "idea";
+
+  if (import.meta.env.DEV) {
+    console.debug("[LinkedInHistory]", {
+      filterStatus,
+      linkdupPublishedCount,
+      scrapedCount: scrapedUnified.length,
+    });
+  }
 
   // ── Apply filter ──────────────────────────────────────────────────────────
 
@@ -450,6 +460,11 @@ export function LinkedInHistory() {
           <span className="text-gray-500">{sortDir === "desc" ? "Newest" : "Oldest"}</span>
         </button>
       </div>
+      {showsScrapedOnly && linkdupPublishedCount > 0 && (
+        <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-xs text-amber-800">
+          Draft/Idea filters only show scraped entries. Linkdup published posts are visible under All or Published.
+        </div>
+      )}
 
       {/* ── Alerts ── */}
       {error && (

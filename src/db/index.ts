@@ -161,6 +161,32 @@ function runMigrations(database: Database.Database): void {
   } catch {
     // Column already exists
   }
+
+  // Migration: multi-reference content sources (max 2 per post)
+  try {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS post_contenus (
+        post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        slot INTEGER NOT NULL CHECK (slot IN (1, 2)),
+        contenu_id INTEGER NOT NULL REFERENCES contenus(id) ON DELETE CASCADE,
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (post_id, slot),
+        UNIQUE (post_id, contenu_id)
+      )
+    `);
+  } catch {
+    // ignore
+  }
+  try {
+    database.exec(`
+      INSERT OR IGNORE INTO post_contenus (post_id, slot, contenu_id)
+      SELECT id, 1, contenu_id
+      FROM posts
+      WHERE contenu_id IS NOT NULL
+    `);
+  } catch {
+    // ignore
+  }
 }
 
 export function closeDb(): void {

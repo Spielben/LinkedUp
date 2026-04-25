@@ -8,6 +8,16 @@ import { publishTextPost, publishPostWithImageBuffers, publishComment } from "..
 import { getPostMediaSources, resolveAllMediaSources } from "../services/post-media.js";
 
 export const postsRouter = Router();
+const MAX_REFERENCE_CONTENT_ITEMS = 2;
+const MAX_REFERENCE_BLOCK_CHARS = 12000;
+
+type PostWithContenus = Record<string, unknown> & {
+  id: number;
+  contenu_id?: number | null;
+  contenu_ids?: number[];
+  contenu_names?: string[];
+  contenu_name?: string | null;
+};
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -48,6 +58,100 @@ function resolvePostBodyForPublish(post: Record<string, unknown>): string | null
   return null;
 }
 
+function sanitizeContenuIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<number>();
+  const ids: number[] = [];
+  for (const item of raw) {
+    const n = Number(item);
+    if (!Number.isInteger(n) || n <= 0) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    ids.push(n);
+  }
+  return ids;
+}
+
+function validateContenuIds(db: ReturnType<typeof getDb>, contenuIds: number[]): void {
+  if (contenuIds.length > MAX_REFERENCE_CONTENT_ITEMS) {
+    throw new Error(`You can select up to ${MAX_REFERENCE_CONTENT_ITEMS} content sources`);
+  }
+  if (contenuIds.length === 0) return;
+  const placeholders = contenuIds.map(() => "?").join(", ");
+  const rows = db
+    .prepare(`SELECT id FROM contenus WHERE id IN (${placeholders})`)
+    .all(...contenuIds) as { id: number }[];
+  if (rows.length !== contenuIds.length) {
+    throw new Error("One or more selected content sources do not exist");
+  }
+}
+
+function replacePostContenus(
+  db: ReturnType<typeof getDb>,
+  postId: number,
+  contenuIds: number[]
+): void {
+  const del = db.prepare("DELETE FROM post_contenus WHERE post_id = ?");
+  const ins = db.prepare(
+    "INSERT INTO post_contenus (post_id, slot, contenu_id) VALUES (?, ?, ?)"
+  );
+  const setLegacy = db.prepare("UPDATE posts SET contenu_id = ? WHERE id = ?");
+  const tx = db.transaction((ids: number[]) => {
+    del.run(postId);
+    ids.forEach((contenuId, index) => {
+      ins.run(postId, index + 1, contenuId);
+    });
+    setLegacy.run(ids[0] ?? null, postId);
+  });
+  tx(contenuIds);
+}
+
+function attachContenuMeta(
+  db: ReturnType<typeof getDb>,
+  post: PostWithContenus | undefined
+): PostWithContenus | undefined {
+  if (!post) return post;
+  const rows = db
+    .prepare(
+      `SELECT pc.contenu_id, c.name
+       FROM post_contenus pc
+       JOIN contenus c ON c.id = pc.contenu_id
+       WHERE pc.post_id = ?
+       ORDER BY pc.slot ASC`
+    )
+    .all(post.id) as { contenu_id: number; name: string | null }[];
+  const contenu_ids = rows.map((r) => r.contenu_id);
+  const contenu_names = rows.map((r) => r.name || "(untitled)");
+  return {
+    ...post,
+    contenu_ids,
+    contenu_names,
+    contenu_name: contenu_names[0] ?? null,
+    contenu_id: contenu_ids[0] ?? null,
+  };
+}
+
+function attachContenuMetaList(
+  db: ReturnType<typeof getDb>,
+  posts: PostWithContenus[]
+): PostWithContenus[] {
+  return posts.map((post) => attachContenuMeta(db, post) as PostWithContenus);
+}
+
+function buildReferenceContentBlock(
+  refs: { slot: number; name: string | null; summary: string | null; raw: string | null }[],
+  fallback: string
+): string {
+  if (refs.length === 0) return fallback;
+  const block = refs
+    .map((ref) => {
+      const body = (ref.summary || ref.raw || "").trim() || fallback;
+      return `Source ${ref.slot} — ${ref.name || "Untitled"}\n${body}`;
+    })
+    .join("\n\n---\n\n");
+  return block.slice(0, MAX_REFERENCE_BLOCK_CHARS);
+}
+
 const postMediaUpload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
@@ -77,8 +181,8 @@ postsRouter.get("/", (_req, res) => {
     LEFT JOIN templates t ON p.template_id = t.id
     LEFT JOIN contenus c ON p.contenu_id = c.id
     ORDER BY p.created_at DESC
-  `).all();
-  res.json(posts);
+  `).all() as PostWithContenus[];
+  res.json(attachContenuMetaList(db, posts));
 });
 
 postsRouter.get("/:id", (req, res) => {
@@ -90,14 +194,27 @@ postsRouter.get("/:id", (req, res) => {
     LEFT JOIN templates t ON p.template_id = t.id
     LEFT JOIN contenus c ON p.contenu_id = c.id
     WHERE p.id = ?
-  `).get(req.params.id);
+  `).get(req.params.id) as PostWithContenus | undefined;
   if (!post) return res.status(404).json({ error: "Post not found" });
-  res.json(post);
+  res.json(attachContenuMeta(db, post));
 });
 
 postsRouter.post("/", (req, res) => {
   const db = getDb();
-  const { subject, description, model, status, style_id, template_id, contenu_id, publication_date } = req.body;
+  const { subject, description, model, status, style_id, template_id, contenu_id, contenu_ids, publication_date } = req.body;
+  const normalizedContenuIds = sanitizeContenuIds(
+    Array.isArray(contenu_ids)
+      ? contenu_ids
+      : contenu_id != null
+        ? [contenu_id]
+        : []
+  );
+  try {
+    validateContenuIds(db, normalizedContenuIds);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Invalid content sources";
+    return res.status(400).json({ error: msg });
+  }
   const result = db.prepare(`
     INSERT INTO posts (subject, description, model, status, style_id, template_id, contenu_id, publication_date)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -108,20 +225,39 @@ postsRouter.post("/", (req, res) => {
     status || "Idea",
     style_id || null,
     template_id || null,
-    contenu_id || null,
+    normalizedContenuIds[0] ?? null,
     publication_date || null
   );
+  replacePostContenus(db, Number(result.lastInsertRowid), normalizedContenuIds);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 postsRouter.put("/:id", (req, res) => {
   const db = getDb();
   const fields = req.body;
+  let nextContenuIds: number[] | null = null;
+  if ("contenu_ids" in fields || "contenu_id" in fields) {
+    nextContenuIds = sanitizeContenuIds(
+      Array.isArray(fields.contenu_ids)
+        ? fields.contenu_ids
+        : fields.contenu_id != null
+          ? [fields.contenu_id]
+          : []
+    );
+    try {
+      validateContenuIds(db, nextContenuIds);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Invalid content sources";
+      return res.status(400).json({ error: msg });
+    }
+  }
   const setClauses: string[] = [];
   const values: unknown[] = [];
 
   for (const [key, value] of Object.entries(fields)) {
     if (key === "id") continue;
+    if (key === "contenu_ids") continue;
+    if (key === "contenu_id" && nextContenuIds !== null) continue;
     if (key === "media_json") {
       if (value === null || value === "") {
         setClauses.push("media_json = ?");
@@ -139,10 +275,15 @@ postsRouter.put("/:id", (req, res) => {
     values.push(value);
   }
 
-  if (setClauses.length === 0) return res.status(400).json({ error: "No fields to update" });
-
-  values.push(req.params.id);
-  db.prepare(`UPDATE posts SET ${setClauses.join(", ")} WHERE id = ?`).run(...values);
+  if (setClauses.length > 0) {
+    values.push(req.params.id);
+    db.prepare(`UPDATE posts SET ${setClauses.join(", ")} WHERE id = ?`).run(...values);
+  } else if (nextContenuIds === null) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+  if (nextContenuIds !== null) {
+    replacePostContenus(db, Number(req.params.id), nextContenuIds);
+  }
 
   const updated = db.prepare(`
     SELECT p.*, s.name as style_name, t.name as template_name, c.name as contenu_name
@@ -151,8 +292,8 @@ postsRouter.put("/:id", (req, res) => {
     LEFT JOIN templates t ON p.template_id = t.id
     LEFT JOIN contenus c ON p.contenu_id = c.id
     WHERE p.id = ?
-  `).get(req.params.id);
-  res.json(updated);
+  `).get(req.params.id) as PostWithContenus | undefined;
+  res.json(attachContenuMeta(db, updated));
 });
 
 postsRouter.delete("/:id", (req, res) => {
@@ -209,6 +350,20 @@ postsRouter.post("/:id/generate", async (req, res) => {
 
   if (!post) return res.status(404).json({ error: "Post not found" });
   if (!post.subject) return res.status(400).json({ error: "Post subject is required to generate content" });
+  const references = db
+    .prepare(
+      `SELECT pc.slot, c.name, c.summary, c.content_raw
+       FROM post_contenus pc
+       JOIN contenus c ON c.id = pc.contenu_id
+       WHERE pc.post_id = ?
+       ORDER BY pc.slot ASC`
+    )
+    .all(req.params.id) as {
+    slot: number;
+    name: string | null;
+    summary: string | null;
+    content_raw: string | null;
+  }[];
 
   const settings = db.prepare("SELECT * FROM settings WHERE id = 1").get() as Record<string, string | null> | undefined;
 
@@ -219,6 +374,14 @@ postsRouter.post("/:id/generate", async (req, res) => {
     : "";
 
   const useFr = (settings as { language?: string | null } | null | undefined)?.language === "fr";
+  const referenceBlockFr = buildReferenceContentBlock(
+    references.map((r) => ({ slot: r.slot, name: r.name, summary: r.summary, raw: r.content_raw })),
+    "Aucun contenu de référence fourni."
+  );
+  const referenceBlockEn = buildReferenceContentBlock(
+    references.map((r) => ({ slot: r.slot, name: r.name, summary: r.summary, raw: r.content_raw })),
+    "No reference content provided."
+  );
 
   const prompt = useFr
     ? `Tu es un expert en création de posts LinkedIn engageants et viraux.
@@ -250,7 +413,7 @@ ${post.template_text || "Aucun template fourni. Utilise une structure engageante
 
 ## Contenu de référence (optionnel)
 
-${post.contenu_summary || post.contenu_raw || "Aucun contenu de référence fourni."}
+${referenceBlockFr}
 
 ---
 
@@ -315,7 +478,7 @@ ${post.template_text || "No template provided. Use an engaging structure that fi
 
 ## Reference content (optional)
 
-${post.contenu_summary || post.contenu_raw || "No reference content provided."}
+${referenceBlockEn}
 
 ---
 
@@ -392,9 +555,9 @@ V3:
       LEFT JOIN templates t ON p.template_id = t.id
       LEFT JOIN contenus c ON p.contenu_id = c.id
       WHERE p.id = ?
-    `).get(req.params.id);
+    `).get(req.params.id) as PostWithContenus | undefined;
 
-    res.json(updated);
+    res.json(attachContenuMeta(db, updated));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
@@ -514,9 +677,9 @@ Return only the optimized post, with no comments or meta-explanation.`;
       LEFT JOIN templates t ON p.template_id = t.id
       LEFT JOIN contenus c ON p.contenu_id = c.id
       WHERE p.id = ?
-    `).get(req.params.id);
+    `).get(req.params.id) as PostWithContenus | undefined;
 
-    res.json(updated);
+    res.json(attachContenuMeta(db, updated));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
@@ -591,9 +754,9 @@ postsRouter.post("/:id/publish", async (req, res) => {
       LEFT JOIN templates t ON p.template_id = t.id
       LEFT JOIN contenus c ON p.contenu_id = c.id
       WHERE p.id = ?
-    `).get(req.params.id);
+    `).get(req.params.id) as PostWithContenus | undefined;
 
-    res.json(updated);
+    res.json(attachContenuMeta(db, updated));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
 
@@ -608,6 +771,37 @@ postsRouter.post("/:id/publish", async (req, res) => {
 
     res.status(500).json({ error: msg });
   }
+});
+
+postsRouter.post("/:id/detach-linkedin", (req, res) => {
+  const db = getDb();
+  const post = db
+    .prepare("SELECT id, linkedin_post_id, linkedin_post_url FROM posts WHERE id = ?")
+    .get(req.params.id) as
+    | { id: number; linkedin_post_id: string | null; linkedin_post_url: string | null }
+    | undefined;
+  if (!post) return res.status(404).json({ error: "Post not found" });
+
+  db.prepare(
+    `UPDATE posts
+     SET linkedin_post_id = NULL,
+         linkedin_post_url = NULL,
+         publish_error = NULL,
+         first_comment_posted = 0,
+         status = CASE WHEN status = 'Published' THEN 'Draft' ELSE status END
+     WHERE id = ?`
+  ).run(req.params.id);
+
+  const updated = db.prepare(`
+    SELECT p.*, s.name as style_name, t.name as template_name, c.name as contenu_name
+    FROM posts p
+    LEFT JOIN styles s ON p.style_id = s.id
+    LEFT JOIN templates t ON p.template_id = t.id
+    LEFT JOIN contenus c ON p.contenu_id = c.id
+    WHERE p.id = ?
+  `).get(req.params.id) as PostWithContenus | undefined;
+
+  res.json(attachContenuMeta(db, updated));
 });
 
 function parseVersions(text: string): { v1: string; v2: string; v3: string } {

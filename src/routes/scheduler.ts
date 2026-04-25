@@ -58,7 +58,7 @@ schedulerRouter.post("/run-scheduled", async (req, res) => {
   const duePosts = db
     .prepare(
       `SELECT * FROM posts
-       WHERE status = 'Scheduled'
+       WHERE status IN ('Scheduled', 'Programmé')
          AND publication_date IS NOT NULL
          AND publication_date <= datetime('now')
          AND linkedin_post_id IS NULL
