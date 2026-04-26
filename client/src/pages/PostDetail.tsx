@@ -403,6 +403,29 @@ export function PostDetail() {
     }
   };
 
+  const scheduleForPublishing = async () => {
+    if (!publicationDateDraft) {
+      showToast("Choose a date and time first", "error");
+      return;
+    }
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const normalized = datetimeLocalToUtcSqlite(publicationDateDraft, timezone);
+      const updated = await update(post.id, { publication_date: normalized, status: "Scheduled" });
+      setPost(updated);
+      setPubDateDirty(false);
+      setPublicationDateDraft(updated.publication_date?.replace(" ", "T").slice(0, 16) ?? "");
+      showToast("Scheduled for publishing \u2713");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveError(msg);
+      showToast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const clearPublicationDate = async () => {
     setSaveError(null);
     setSaving(true);
@@ -869,9 +892,6 @@ export function PostDetail() {
 
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Publication date</label>
-              <p className="text-[11px] text-gray-400 mb-1.5 leading-snug">
-                Choose date and time, then confirm — nothing is stored until you click Save.
-              </p>
               <input
                 type="datetime-local"
                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
@@ -884,11 +904,11 @@ export function PostDetail() {
               <div className="flex flex-wrap gap-2 mt-2">
                 <button
                   type="button"
-                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40"
-                  disabled={saving}
-                  onClick={() => void applyPublicationDate()}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 font-medium"
+                  disabled={saving || !publicationDateDraft}
+                  onClick={() => void scheduleForPublishing()}
                 >
-                  Save scheduled date
+                  Schedule for publishing
                 </button>
                 <button
                   type="button"
