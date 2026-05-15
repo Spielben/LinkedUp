@@ -3,6 +3,7 @@ const USE_ENV = process.env.USE_ENV_CREDENTIALS === "true";
 export type CredentialKey =
   | "openrouter"
   | "apify"
+  | "assemblyai"
   | "linkedin_client_id"
   | "linkedin_client_secret"
   | "linkedin_access_token"
@@ -12,6 +13,7 @@ export type CredentialKey =
 const ENV_MAP: Record<CredentialKey, string> = {
   openrouter: "OPENROUTER_API_KEY",
   apify: "APIFY_API_KEY",
+  assemblyai: "ASSEMBLYAI_API_KEY",
   linkedin_client_id: "LINKEDIN_CLIENT_ID",
   linkedin_client_secret: "LINKEDIN_CLIENT_SECRET",
   linkedin_access_token: "LINKEDIN_ACCESS_TOKEN",
