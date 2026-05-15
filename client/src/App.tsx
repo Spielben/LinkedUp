@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router";
 import { Dashboard } from "./pages/Dashboard";
 import { PostsList } from "./pages/PostsList";
 import { StylesList } from "./pages/StylesList";
 import { TemplatesList } from "./pages/TemplatesList";
 import { ContenusList } from "./pages/ContenusList";
+import { ContenuDetail } from "./pages/ContenuDetail";
 import { Settings } from "./pages/Settings";
 import { PostDetail } from "./pages/PostDetail";
 import { LinkedInHistory } from "./pages/LinkedInHistory";
+import { Calendar } from "./pages/Calendar";
+
+type Theme = "light" | "dark";
+
+function getInitialTheme(): Theme {
+  return localStorage.getItem("theme") === "dark" ? "dark" : "light";
+}
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: "⊞" },
@@ -16,10 +24,19 @@ const navItems = [
   { to: "/templates", label: "Templates", icon: "📋" },
   { to: "/contenus", label: "Contenus", icon: "📝" },
   { to: "/linkedin", label: "LinkedIn", icon: "🔗" },
+  { to: "/calendar", label: "Calendar", icon: "📅" },
   { to: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
-function SidebarNav({ onClose }: { onClose?: () => void }) {
+function SidebarNav({
+  onClose,
+  theme,
+  onToggleTheme,
+}: {
+  onClose?: () => void;
+  theme: Theme;
+  onToggleTheme: () => void;
+}) {
   return (
     <>
       <div className="p-4 border-b border-gray-200 flex items-start justify-between">
@@ -38,6 +55,7 @@ function SidebarNav({ onClose }: { onClose?: () => void }) {
           </button>
         )}
       </div>
+
       <ul className="flex-1 py-2 overflow-y-auto">
         {navItems.map(({ to, label, icon }) => (
           <li key={to}>
@@ -59,38 +77,62 @@ function SidebarNav({ onClose }: { onClose?: () => void }) {
           </li>
         ))}
       </ul>
+
+      {/* Dark mode toggle */}
+      <div className="p-3 border-t border-gray-200 shrink-0">
+        <button
+          onClick={onToggleTheme}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          <span className="text-base">{theme === "dark" ? "☀️" : "🌙"}</span>
+          <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
+      </div>
     </>
   );
 }
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+  }, []);
 
   return (
     <BrowserRouter>
       <div className="flex h-screen bg-gray-50 overflow-hidden">
 
-        {/* ── Desktop sidebar — always visible, never on mobile ── */}
+        {/* ── Desktop sidebar ── */}
         <nav className="hidden md:flex md:w-56 bg-white border-r border-gray-200 flex-col shrink-0">
-          <SidebarNav />
+          <SidebarNav theme={theme} onToggleTheme={toggleTheme} />
         </nav>
 
-        {/* ── Mobile drawer overlay ── */}
+        {/* ── Mobile drawer ── */}
         {sidebarOpen && (
           <div className="md:hidden fixed inset-0 z-40 flex">
-            {/* Backdrop */}
             <div
               className="fixed inset-0 bg-black/40"
               onClick={() => setSidebarOpen(false)}
             />
-            {/* Drawer */}
             <nav className="relative z-50 w-64 max-w-[80vw] bg-white flex flex-col shadow-xl">
-              <SidebarNav onClose={() => setSidebarOpen(false)} />
+              <SidebarNav
+                onClose={() => setSidebarOpen(false)}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+              />
             </nav>
           </div>
         )}
 
-        {/* ── Main content area ── */}
+        {/* ── Main content ── */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
           {/* Mobile top bar */}
@@ -110,14 +152,16 @@ export default function App() {
           {/* Page content */}
           <main className="flex-1 overflow-auto p-4 md:p-6">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/posts" element={<PostsList />} />
-              <Route path="/posts/:id" element={<PostDetail />} />
-              <Route path="/styles" element={<StylesList />} />
-              <Route path="/templates" element={<TemplatesList />} />
-              <Route path="/contenus" element={<ContenusList />} />
-              <Route path="/linkedin" element={<LinkedInHistory />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/"           element={<Dashboard />} />
+              <Route path="/posts"      element={<PostsList />} />
+              <Route path="/posts/:id"  element={<PostDetail />} />
+              <Route path="/styles"     element={<StylesList />} />
+              <Route path="/templates"  element={<TemplatesList />} />
+              <Route path="/contenus"        element={<ContenusList />} />
+              <Route path="/contenus/:id"   element={<ContenuDetail />} />
+              <Route path="/linkedin"   element={<LinkedInHistory />} />
+              <Route path="/calendar"   element={<Calendar />} />
+              <Route path="/settings"   element={<Settings />} />
             </Routes>
           </main>
         </div>

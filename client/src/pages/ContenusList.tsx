@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { useContenusStore } from "../stores/contenus";
 import { importFile } from "../lib/import-file";
 import { apiFetch } from "../lib/api";
@@ -55,6 +56,7 @@ export function ContenusList() {
   const [replacingId, setReplacingId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchContenus();
@@ -533,6 +535,13 @@ export function ContenusList() {
                         />
                       </label>
                     )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/contenus/${c.id}`); }}
+                      className="px-2.5 py-1 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 min-h-[2rem] sm:min-h-0"
+                    >
+                      Edit
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); void handleDelete(c.id); }}
