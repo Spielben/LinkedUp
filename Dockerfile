@@ -11,7 +11,8 @@ RUN npm run build
 # Runtime: production deps only (native modules compiled for this image)
 FROM node:20-alpine
 WORKDIR /app
-RUN apk add --no-cache ca-certificates python3 make g++ libsecret-dev \
+RUN apk add --no-cache ca-certificates python3 py3-pip ffmpeg make g++ libsecret-dev \
+  && pip3 install --no-cache-dir --break-system-packages yt-dlp \
   && update-ca-certificates
 COPY package*.json ./
 RUN npm ci --omit=dev
