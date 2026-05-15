@@ -163,7 +163,7 @@ function PublishedPostCard({
       onClick={onClick}
     >
       {imageUrl ? (
-        <div className="w-full h-32 overflow-hidden bg-gray-100">
+        <div className="w-full h-16 overflow-hidden bg-gray-100">
           <img
             src={imageUrl}
             alt={post.subject || ""}
@@ -171,8 +171,8 @@ function PublishedPostCard({
           />
         </div>
       ) : (
-        <div className="w-full h-16 bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center border-b border-gray-100">
-          <span className="text-2xl opacity-60">✅</span>
+        <div className="w-full h-8 bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center border-b border-gray-100">
+          <span className="text-sm opacity-60">✅</span>
         </div>
       )}
       <div className="p-3">
@@ -222,7 +222,7 @@ function ScheduledPostCard({
     >
       {/* Thumbnail */}
       {imageUrl ? (
-        <div className="w-full h-32 overflow-hidden bg-gray-100">
+        <div className="w-full h-16 overflow-hidden bg-gray-100">
           <img
             src={imageUrl}
             alt={post.subject || ""}
@@ -230,8 +230,8 @@ function ScheduledPostCard({
           />
         </div>
       ) : (
-        <div className="w-full h-16 bg-gradient-to-br from-teal-50 to-blue-50 flex items-center justify-center border-b border-gray-100">
-          <span className="text-2xl opacity-60">📋</span>
+        <div className="w-full h-8 bg-gradient-to-br from-teal-50 to-blue-50 flex items-center justify-center border-b border-gray-100">
+          <span className="text-sm opacity-60">📋</span>
         </div>
       )}
 
@@ -269,7 +269,9 @@ function ScheduledPostCard({
 
 // ── Calendar helpers ──────────────────────────────────────────────────────────
 
-interface CalPost { id: number; subject: string | null; status: string }
+interface CalPost { id: number; subject: string | null; status: string; text: string }
+
+interface TooltipState { post: CalPost; x: number; y: number }
 
 /** UTC SQLite date → "YYYY-MM-DD" in user timezone */
 function toDateKey(utcStr: string, timezone: string): string {
@@ -339,11 +341,22 @@ function fmtWeekRange(days: string[]): string {
 
 // ── Calendar sub-components ───────────────────────────────────────────────────
 
-function PostChip({ post, onClick }: { post: CalPost; onClick: () => void }) {
+function PostChip({
+  post,
+  onClick,
+  onHover,
+  onLeave,
+}: {
+  post: CalPost;
+  onClick: () => void;
+  onHover: (e: React.MouseEvent, post: CalPost) => void;
+  onLeave: () => void;
+}) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      title={post.subject ?? "(untitled)"}
+      onMouseEnter={(e) => onHover(e, post)}
+      onMouseLeave={onLeave}
       className={`w-full text-left text-xs px-1.5 py-0.5 rounded truncate font-medium leading-tight ${
         post.status === "Published"
           ? "bg-green-100 text-green-800 hover:bg-green-200"
@@ -360,11 +373,15 @@ function MiniMonth({
   postsByDate,
   today,
   onPostClick,
+  onPostHover,
+  onPostLeave,
 }: {
   monthKey: string;
   postsByDate: Map<string, CalPost[]>;
   today: string;
   onPostClick: (id: number) => void;
+  onPostHover: (e: React.MouseEvent, post: CalPost) => void;
+  onPostLeave: () => void;
 }) {
   const cells = getMonthCells(monthKey);
   return (
@@ -392,7 +409,8 @@ function MiniMonth({
                     <button
                       key={p.id}
                       onClick={() => onPostClick(p.id)}
-                      title={p.subject ?? "(untitled)"}
+                      onMouseEnter={(e) => onPostHover(e, p)}
+                      onMouseLeave={onPostLeave}
                       className={`w-2 h-2 rounded-full ${p.status === "Published" ? "bg-green-500 hover:bg-green-700" : "bg-teal-500 hover:bg-teal-700"}`}
                     />
                   ))}
@@ -421,6 +439,12 @@ function PostCalendar({
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const today = useMemo(() => todayKey(timezone), [timezone]);
   const [navKey, setNavKey] = useState(today);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+
+  const handlePostHover = (e: React.MouseEvent, post: CalPost) => {
+    setTooltip({ post, x: e.clientX, y: e.clientY });
+  };
+  const handlePostLeave = () => setTooltip(null);
 
   // Map dateKey → posts
   const postsByDate = useMemo(() => {
@@ -431,7 +455,7 @@ function PostCalendar({
       const key = toDateKey(p.publication_date, timezone);
       if (!key) continue;
       if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push({ id: p.id, subject: p.subject, status: p.status });
+      map.get(key)!.push({ id: p.id, subject: p.subject, status: p.status, text: getPostText(p) });
     }
     return map;
   }, [posts, timezone]);
@@ -545,7 +569,13 @@ function PostCalendar({
                   }`}
                 >
                   {dayPosts.map((p) => (
-                    <PostChip key={p.id} post={p} onClick={() => onPostClick(p.id)} />
+                    <PostChip
+                      key={p.id}
+                      post={p}
+                      onClick={() => onPostClick(p.id)}
+                      onHover={handlePostHover}
+                      onLeave={handlePostLeave}
+                    />
                   ))}
                 </div>
               );
@@ -577,7 +607,13 @@ function PostCalendar({
                   </div>
                   <div className="space-y-0.5">
                     {dayPosts.slice(0, 2).map((p) => (
-                      <PostChip key={p.id} post={p} onClick={() => onPostClick(p.id)} />
+                      <PostChip
+                        key={p.id}
+                        post={p}
+                        onClick={() => onPostClick(p.id)}
+                        onHover={handlePostHover}
+                        onLeave={handlePostLeave}
+                      />
                     ))}
                     {dayPosts.length > 2 && (
                       <p className="text-[10px] text-gray-400 pl-1">+{dayPosts.length - 2} more</p>
@@ -600,8 +636,44 @@ function PostCalendar({
               postsByDate={postsByDate}
               today={today}
               onPostClick={onPostClick}
+              onPostHover={handlePostHover}
+              onPostLeave={handlePostLeave}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Hover tooltip ── */}
+      {tooltip && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{
+            left: Math.min(tooltip.x + 12, window.innerWidth - 280),
+            top: tooltip.y - 8,
+            transform: "translateY(-100%)",
+          }}
+        >
+          <div className="bg-white border border-gray-200 rounded-xl shadow-xl w-64 p-3 text-left">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                tooltip.post.status === "Published"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-teal-100 text-teal-800"
+              }`}>
+                {tooltip.post.status}
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-gray-900 mb-1 leading-snug">
+              {tooltip.post.subject ?? "(untitled)"}
+            </p>
+            {tooltip.post.text ? (
+              <p className="text-xs text-gray-500 leading-relaxed line-clamp-4">
+                {tooltip.post.text}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 italic">No content written yet</p>
+            )}
+          </div>
         </div>
       )}
     </div>
