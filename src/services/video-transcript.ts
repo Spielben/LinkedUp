@@ -131,9 +131,21 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
   const base = path.join(tmpDir, `audio-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
   const outTemplate = `${base}.%(ext)s`;
 
+  const ytDlpBin =
+    process.env.YT_DLP_PATH ||
+    ["/usr/local/bin/yt-dlp", "/usr/bin/yt-dlp", "yt-dlp"].find((p) => {
+      try {
+        fs.accessSync(p, fs.constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    }) ||
+    "yt-dlp";
+
   try {
     await execFileAsync(
-      "yt-dlp",
+      ytDlpBin,
       [
         "-x",
         "--audio-format",
