@@ -5,6 +5,7 @@ import path from "node:path";
 import { getDb } from "../db/index.js";
 import { callOpenRouter, estimateCost } from "../services/openrouter.js";
 import { extractFileContent, fetchWebContent, fetchYouTubeTranscript } from "../services/content-ingestion.js";
+import { fetchVideoTranscriptAssembly, isThirdPartyVideoIngestUrl } from "../services/video-transcript.js";
 
 /** Ingest: English by default; French when Settings → language is `fr`. */
 function buildIngestSummaryPrompt(
@@ -80,7 +81,7 @@ Return only the structured summary.`;
 
 export const contenusRouter = Router();
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const ALLOWED_CONTENT_TYPES = new Set(["PDF", "Article"]);
+const ALLOWED_CONTENT_TYPES = new Set(["PDF", "Article", "Video"]);
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "text/plain",
@@ -120,14 +121,16 @@ contenusRouter.get("/:id", (req, res) => {
 
 contenusRouter.post("/", (req, res) => {
   const db = getDb();
-  const { name, description, url, type, content_raw, category } = req.body;
+  const { name, description, url, type, content_raw, category, title, source_notes } = req.body;
   const cat =
     typeof category === "string" && category.trim() ? category.trim() : null;
+  const titleVal = typeof title === "string" && title.trim() ? title.trim() : null;
+  const notesVal = typeof source_notes === "string" && source_notes.trim() ? source_notes.trim() : null;
   const result = db
     .prepare(
-      "INSERT INTO contenus (name, description, category, url, type, content_raw) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO contenus (name, description, category, url, type, content_raw, title, source_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .run(name, description || null, cat, url || null, type || null, content_raw || null);
+    .run(name, description || null, cat, url || null, type || null, content_raw || null, titleVal, notesVal);
   const created = db.prepare("SELECT * FROM contenus WHERE id = ?").get(result.lastInsertRowid);
   res.status(201).json(created);
 });
@@ -149,17 +152,24 @@ contenusRouter.post("/upload", (req, res, next) => {
   const db = getDb();
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
   const description = typeof req.body.description === "string" ? req.body.description.trim() : "";
+  const title = typeof req.body.title === "string" ? req.body.title.trim() || null : null;
+  const sourceNotes = typeof req.body.source_notes === "string" ? req.body.source_notes.trim() || null : null;
   const type = typeof req.body.type === "string" ? req.body.type.trim() : "";
   const category =
     typeof req.body.category === "string" && req.body.category.trim() ? req.body.category.trim() : null;
 
   if (!name) return res.status(400).json({ error: "Name is required" });
-  if (!ALLOWED_CONTENT_TYPES.has(type)) return res.status(400).json({ error: "Type must be PDF or Article" });
+  if (!ALLOWED_CONTENT_TYPES.has(type)) return res.status(400).json({ error: "Type must be PDF, Article, or Video" });
+  if (type === "Video") {
+    return res.status(400).json({
+      error: "Video sources use a URL only — create content with type Video (no file), paste the link, then Ingest.",
+    });
+  }
   if (!req.file) return res.status(400).json({ error: "No file (field name: file)" });
 
   const result = db.prepare(
-    "INSERT INTO contenus (name, description, category, type, status) VALUES (?, ?, ?, ?, 'pending')"
-  ).run(name, description || null, category, type);
+    "INSERT INTO contenus (name, description, category, type, status, title, source_notes) VALUES (?, ?, ?, ?, 'pending', ?, ?)"
+  ).run(name, description || null, category, type, title, sourceNotes);
   const id = Number(result.lastInsertRowid);
   const uploadDir = path.join(process.cwd(), "data", "contenus", String(id));
 
@@ -175,6 +185,60 @@ contenusRouter.post("/upload", (req, res, next) => {
     return res.status(201).json(created);
   } catch (err: unknown) {
     db.prepare("DELETE FROM contenus WHERE id = ?").run(id);
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: msg });
+  }
+});
+
+contenusRouter.post("/:id/replace-upload", (req, res, next) => {
+  contenuUpload.single("file")(req, res, (err: unknown) => {
+    if (!err) return next();
+    const msg =
+      err instanceof multer.MulterError
+        ? err.code === "LIMIT_FILE_SIZE"
+          ? "File too large (max 20 MB)"
+          : err.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    return res.status(400).json({ error: msg });
+  });
+}, (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const row = db.prepare("SELECT * FROM contenus WHERE id = ?").get(id) as
+    | { type: string | null; pdf_path: string | null }
+    | undefined;
+  if (!row) return res.status(404).json({ error: "Contenu not found" });
+  const t = row.type || "";
+  if (t !== "PDF" && t !== "Article") {
+    return res.status(400).json({ error: "Replace file is only for PDF or Article types" });
+  }
+  if (!req.file) return res.status(400).json({ error: "No file (field name: file)" });
+
+  const oldPath = row.pdf_path;
+  if (oldPath && !oldPath.includes("..")) {
+    const absOld = path.isAbsolute(oldPath) ? oldPath : path.join(process.cwd(), oldPath);
+    try {
+      if (absOld.startsWith(path.join(process.cwd(), "data", "contenus"))) fs.unlinkSync(absOld);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const uploadDir = path.join(process.cwd(), "data", "contenus", String(id));
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    const safeName = sanitizeUploadFilename(req.file.originalname);
+    const absolutePath = path.join(uploadDir, safeName);
+    fs.writeFileSync(absolutePath, req.file.buffer);
+    const relativePath = path.relative(process.cwd(), absolutePath).split(path.sep).join("/");
+    db.prepare(
+      "UPDATE contenus SET pdf_path = ?, summary = NULL, content_raw = NULL, status = 'pending' WHERE id = ?"
+    ).run(relativePath, id);
+    const updated = db.prepare("SELECT * FROM contenus WHERE id = ?").get(id);
+    return res.json(updated);
+  } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return res.status(500).json({ error: msg });
   }
@@ -224,11 +288,24 @@ contenusRouter.post("/:id/ingest", async (req, res) => {
     const pdf_path = contenu.pdf_path as string | null;
 
     if (url && (url.includes("youtube.com") || url.includes("youtu.be"))) {
-      content_raw = await fetchYouTubeTranscript(url);
+      try {
+        content_raw = await fetchYouTubeTranscript(url);
+      } catch (ytErr) {
+        const msg = ytErr instanceof Error ? ytErr.message : String(ytErr);
+        console.warn("[ingest] youtube-transcript failed, falling back to AssemblyAI:", msg);
+      }
+      if (!content_raw.trim()) {
+        console.log("[ingest] youtube-transcript returned empty content, falling back to AssemblyAI");
+        content_raw = await fetchVideoTranscriptAssembly(url);
+      }
+    } else if (url && isThirdPartyVideoIngestUrl(url)) {
+      content_raw = await fetchVideoTranscriptAssembly(url);
     } else if (pdf_path) {
       content_raw = await extractFileContent(pdf_path);
     } else if (type === "PDF" || type === "Article") {
       return res.status(400).json({ error: "No uploaded file found for this content" });
+    } else if (type === "Video" && !url) {
+      return res.status(400).json({ error: "Video content needs a URL (TikTok, Facebook, Instagram, Vimeo, X…)" });
     } else if (url) {
       content_raw = await fetchWebContent(url);
     } else {
@@ -238,8 +315,11 @@ contenusRouter.post("/:id/ingest", async (req, res) => {
     // 2. Summarize with OpenRouter (en default; fr when settings.language === 'fr')
     const settingsRow = db.prepare("SELECT language FROM settings WHERE id = 1").get() as { language?: string } | undefined;
     const useFrench = settingsRow?.language === "fr";
+    const descCombined = [contenu.description, contenu.source_notes as string | null]
+      .filter((x) => x && String(x).trim())
+      .join("\n\n");
     const prompt = buildIngestSummaryPrompt(
-      { type, name: String(contenu.name ?? ""), description: contenu.description },
+      { type, name: String(contenu.name ?? ""), description: descCombined || null },
       content_raw,
       useFrench
     );
