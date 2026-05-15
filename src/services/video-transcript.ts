@@ -146,7 +146,11 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
   const cookiesPath = path.join(getDataDir(), "yt-cookies.txt");
   const cookiesArgs = fs.existsSync(cookiesPath) ? ["--cookies", cookiesPath] : [];
   const poToken = process.env.YT_PO_TOKEN?.trim();
-  const poTokenArgs = poToken ? ["--extractor-args", `youtube:po_token=web+${poToken}`] : [];
+  // Use android client to bypass YouTube bot-detection on datacenter IPs.
+  // If PO_TOKEN is set, combine it with the android extractor arg.
+  const extractorArgs = poToken
+    ? `youtube:player_client=android,web;po_token=web+${poToken}`
+    : "youtube:player_client=android,web";
 
   try {
     await execFileAsync(
@@ -161,10 +165,9 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
         "--no-warnings",
         "--no-cache-dir",
         "--no-mtime",
-        "--js-runtimes",
-        "node:/usr/local/bin/node",
+        "--extractor-args",
+        extractorArgs,
         ...cookiesArgs,
-        ...poTokenArgs,
         url.trim(),
       ],
       { timeout: YT_DLP_TIMEOUT_MS, maxBuffer: 20 * 1024 * 1024 }

@@ -396,8 +396,23 @@ export async function fetchYouTubeTranscript(url: string): Promise<string> {
   const { YoutubeTranscript } = await import(
     "youtube-transcript/dist/youtube-transcript.esm.js"
   );
-  const segments = await YoutubeTranscript.fetchTranscript(videoId, { fetch: customFetch });
-  return segments.map((s: { text: string }) => s.text).join(" ").replace(/\s+/g, " ").trim();
+
+  // Try languages in order: no preference (auto), French, English
+  const langsToTry: (string | undefined)[] = [undefined, "fr", "en"];
+  let lastErr: unknown;
+  for (const lang of langsToTry) {
+    try {
+      const opts: Record<string, unknown> = { fetch: customFetch };
+      if (lang) opts.lang = lang;
+      const segments = await YoutubeTranscript.fetchTranscript(videoId, opts);
+      const text = segments.map((s: { text: string }) => s.text).join(" ").replace(/\s+/g, " ").trim();
+      if (text) return text;
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[youtube-transcript] lang=${lang ?? "auto"} failed for ${videoId}:`, err instanceof Error ? err.message : String(err));
+    }
+  }
+  throw lastErr ?? new Error("youtube-transcript: all language attempts returned empty");
 }
 
 export async function fetchPdfContent(filePath: string): Promise<string> {
