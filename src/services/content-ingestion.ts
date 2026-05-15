@@ -355,17 +355,22 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
-/** Parse a Netscape cookies file and return a Cookie header string for the given domain. */
-function parseCookiesTxtForDomain(cookiesFilePath: string, domain: string): string {
+/** Parse a Netscape cookies file and return a Cookie header string for YouTube (includes google.com auth cookies). */
+function parseCookiesTxtForYouTube(cookiesFilePath: string): string {
   const lines = readFileSync(cookiesFilePath, "utf-8").split("\n");
   const pairs: string[] = [];
+  const allowedDomains = ["youtube.com", "google.com", "accounts.google.com"];
   for (const line of lines) {
     if (line.startsWith("#") || !line.trim()) continue;
     const cols = line.split("\t");
     if (cols.length < 7) continue;
     const cookieDomain = cols[0]!.replace(/^\./, "");
-    if (!domain.endsWith(cookieDomain) && !cookieDomain.endsWith(domain.replace(/^\./, ""))) continue;
-    pairs.push(`${cols[5]}=${cols[6]}`);
+    const matches = allowedDomains.some(
+      (d) => cookieDomain === d || cookieDomain.endsWith("." + d)
+    );
+    if (!matches) continue;
+    const value = (cols[6] ?? "").replace(/\r?\n$/, "");
+    pairs.push(`${cols[5]}=${value}`);
   }
   return pairs.join("; ");
 }
@@ -377,7 +382,7 @@ export async function fetchYouTubeTranscript(url: string): Promise<string> {
   const cookiesPath = path.join(path.resolve(DATA_DIRNAME), "yt-cookies.txt");
   let customFetch: typeof globalThis.fetch | undefined;
   if (existsSync(cookiesPath)) {
-    const cookieHeader = parseCookiesTxtForDomain(cookiesPath, "youtube.com");
+    const cookieHeader = parseCookiesTxtForYouTube(cookiesPath);
     if (cookieHeader) {
       customFetch = (input, init) =>
         globalThis.fetch(input as RequestInfo, {
