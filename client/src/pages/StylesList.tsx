@@ -24,7 +24,7 @@ export function StylesList() {
   const [generateErrors, setGenerateErrors] = useState<Record<number, string>>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState({ name: "", linkedin_url: "", examples: "" });
+  const [editDraft, setEditDraft] = useState({ name: "", linkedin_url: "", examples: "", instructions: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -38,12 +38,13 @@ export function StylesList() {
     fetchStyles();
   }, []);
 
-  const startEdit = (style: { id: number; name: string; linkedin_url: string | null; examples: string | null }) => {
+  const startEdit = (style: { id: number; name: string; linkedin_url: string | null; examples: string | null; instructions: string | null }) => {
     setEditingId(style.id);
     setEditDraft({
       name: style.name || "",
       linkedin_url: style.linkedin_url || "",
       examples: style.examples || "",
+      instructions: style.instructions || "",
     });
     setEditError(null);
     setGenerateErrors((prev) => {
@@ -72,6 +73,7 @@ export function StylesList() {
         name,
         linkedin_url: editDraft.linkedin_url.trim() || null,
         examples: editDraft.examples.trim() || null,
+        instructions: editDraft.instructions.trim() || null,
       });
       await fetchStyles();
       setEditingId(null);
@@ -316,6 +318,18 @@ export function StylesList() {
                       value={editDraft.examples}
                       onChange={(e) => setEditDraft({ ...editDraft, examples: e.target.value })}
                       placeholder="Paste 2–5 LinkedIn posts to analyze..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Style instructions <span className="text-gray-400 font-normal">(AI result — editable)</span>
+                    </label>
+                    <textarea
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+                      rows={10}
+                      value={editDraft.instructions}
+                      onChange={(e) => setEditDraft({ ...editDraft, instructions: e.target.value })}
+                      placeholder="Click Generate to populate — or write your own style guide here…"
                     />
                   </div>
                   <div className="flex flex-wrap gap-2">
