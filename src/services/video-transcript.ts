@@ -143,6 +143,9 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
     }) ||
     "yt-dlp";
 
+  const cookiesPath = path.join(getDataDir(), "yt-cookies.txt");
+  const cookiesArgs = fs.existsSync(cookiesPath) ? ["--cookies", cookiesPath] : [];
+
   try {
     await execFileAsync(
       ytDlpBin,
@@ -158,6 +161,7 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
         "--no-warnings",
         "--no-cache-dir",
         "--no-mtime",
+        ...cookiesArgs,
         url.trim(),
       ],
       { timeout: YT_DLP_TIMEOUT_MS, maxBuffer: 20 * 1024 * 1024 }
