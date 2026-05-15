@@ -187,6 +187,26 @@ function runMigrations(database: Database.Database): void {
   } catch {
     // ignore
   }
+
+  for (const col of [
+    "company_context TEXT",
+    "forbidden_expressions TEXT",
+    "image_generation_model TEXT",
+  ]) {
+    try {
+      database.exec(`ALTER TABLE settings ADD COLUMN ${col}`);
+    } catch {
+      // Column already exists
+    }
+  }
+
+  for (const col of ["title TEXT", "source_notes TEXT"]) {
+    try {
+      database.exec(`ALTER TABLE contenus ADD COLUMN ${col}`);
+    } catch {
+      // Column already exists
+    }
+  }
 }
 
 export function closeDb(): void {
