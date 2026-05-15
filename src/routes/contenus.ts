@@ -120,19 +120,28 @@ contenusRouter.get("/:id", (req, res) => {
 });
 
 contenusRouter.post("/", (req, res) => {
-  const db = getDb();
-  const { name, description, url, type, content_raw, category, title, source_notes } = req.body;
-  const cat =
-    typeof category === "string" && category.trim() ? category.trim() : null;
-  const titleVal = typeof title === "string" && title.trim() ? title.trim() : null;
-  const notesVal = typeof source_notes === "string" && source_notes.trim() ? source_notes.trim() : null;
-  const result = db
-    .prepare(
-      "INSERT INTO contenus (name, description, category, url, type, content_raw, title, source_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-    )
-    .run(name, description || null, cat, url || null, type || null, content_raw || null, titleVal, notesVal);
-  const created = db.prepare("SELECT * FROM contenus WHERE id = ?").get(result.lastInsertRowid);
-  res.status(201).json(created);
+  try {
+    const db = getDb();
+    const { name, description, url, type, content_raw, category, title, source_notes } = req.body;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+    const cat =
+      typeof category === "string" && category.trim() ? category.trim() : null;
+    const titleVal = typeof title === "string" && title.trim() ? title.trim() : null;
+    const notesVal = typeof source_notes === "string" && source_notes.trim() ? source_notes.trim() : null;
+    const result = db
+      .prepare(
+        "INSERT INTO contenus (name, description, category, url, type, content_raw, title, source_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      )
+      .run(name.trim(), description || null, cat, url || null, type || null, content_raw || null, titleVal, notesVal);
+    const created = db.prepare("SELECT * FROM contenus WHERE id = ?").get(result.lastInsertRowid);
+    return res.status(201).json(created);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[contenus/create]", msg);
+    return res.status(500).json({ error: msg });
+  }
 });
 
 contenusRouter.post("/upload", (req, res, next) => {
