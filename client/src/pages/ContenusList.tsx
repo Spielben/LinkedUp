@@ -544,8 +544,26 @@ export function ContenusList() {
                 </div>
 
                 {expandedId === c.id && (
-                  <div className="mt-3 pt-3 border-t space-y-2">
-                    <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="mt-3 pt-3 border-t space-y-3" onClick={(e) => e.stopPropagation()}>
+                    {/* URL edit */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-medium text-gray-600 shrink-0">URL</span>
+                      <input
+                        type="url"
+                        className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 flex-1 min-w-0"
+                        defaultValue={c.url || ""}
+                        placeholder="https://…"
+                        onBlur={async (e) => {
+                          const v = e.target.value.trim() || null;
+                          if (v !== (c.url || null)) {
+                            await updateContenu(c.id, { url: v });
+                            await fetchContenus();
+                          }
+                        }}
+                      />
+                    </div>
+                    {/* Category edit */}
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-medium text-gray-600">Category</span>
                       <select
                         className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 max-w-full"
