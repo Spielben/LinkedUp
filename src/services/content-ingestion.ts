@@ -355,15 +355,43 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
+/** Parse a Netscape cookies file and return a Cookie header string for the given domain. */
+function parseCookiesTxtForDomain(cookiesFilePath: string, domain: string): string {
+  const lines = readFileSync(cookiesFilePath, "utf-8").split("\n");
+  const pairs: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("#") || !line.trim()) continue;
+    const cols = line.split("\t");
+    if (cols.length < 7) continue;
+    const cookieDomain = cols[0]!.replace(/^\./, "");
+    if (!domain.endsWith(cookieDomain) && !cookieDomain.endsWith(domain.replace(/^\./, ""))) continue;
+    pairs.push(`${cols[5]}=${cols[6]}`);
+  }
+  return pairs.join("; ");
+}
+
 export async function fetchYouTubeTranscript(url: string): Promise<string> {
   const videoId = extractYouTubeId(url);
   if (!videoId) throw new Error(`Could not extract YouTube video ID from: ${url}`);
+
+  const cookiesPath = path.join(path.resolve(DATA_DIRNAME), "yt-cookies.txt");
+  let customFetch: typeof globalThis.fetch | undefined;
+  if (existsSync(cookiesPath)) {
+    const cookieHeader = parseCookiesTxtForDomain(cookiesPath, "youtube.com");
+    if (cookieHeader) {
+      customFetch = (input, init) =>
+        globalThis.fetch(input as RequestInfo, {
+          ...(init ?? {}),
+          headers: { ...(init?.headers ?? {}), cookie: cookieHeader },
+        });
+    }
+  }
 
   // Avoid package "main" (CJS in a "type":"module" tree → "exports is not defined" under Node ESM).
   const { YoutubeTranscript } = await import(
     "youtube-transcript/dist/youtube-transcript.esm.js"
   );
-  const segments = await YoutubeTranscript.fetchTranscript(videoId);
+  const segments = await YoutubeTranscript.fetchTranscript(videoId, { fetch: customFetch });
   return segments.map((s: { text: string }) => s.text).join(" ").replace(/\s+/g, " ").trim();
 }
 
