@@ -161,6 +161,8 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
         "--no-warnings",
         "--no-cache-dir",
         "--no-mtime",
+        "--js-runtimes",
+        "node:/usr/local/bin/node",
         ...cookiesArgs,
         url.trim(),
       ],
