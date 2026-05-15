@@ -145,6 +145,8 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
 
   const cookiesPath = path.join(getDataDir(), "yt-cookies.txt");
   const cookiesArgs = fs.existsSync(cookiesPath) ? ["--cookies", cookiesPath] : [];
+  const poToken = process.env.YT_PO_TOKEN?.trim();
+  const poTokenArgs = poToken ? ["--extractor-args", `youtube:po_token=web+${poToken}`] : [];
 
   try {
     await execFileAsync(
@@ -152,9 +154,7 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
       [
         "-x",
         "--audio-format",
-        "mp3",
-        "--audio-quality",
-        "0",
+        "m4a",
         "-o",
         outTemplate,
         "--no-playlist",
@@ -164,6 +164,7 @@ export async function fetchVideoTranscriptAssembly(url: string): Promise<string>
         "--js-runtimes",
         "node:/usr/local/bin/node",
         ...cookiesArgs,
+        ...poTokenArgs,
         url.trim(),
       ],
       { timeout: YT_DLP_TIMEOUT_MS, maxBuffer: 20 * 1024 * 1024 }
