@@ -9,7 +9,6 @@ import { ContenuDetail } from "./pages/ContenuDetail";
 import { Settings } from "./pages/Settings";
 import { PostDetail } from "./pages/PostDetail";
 import { LinkedInHistory } from "./pages/LinkedInHistory";
-import { Calendar } from "./pages/Calendar";
 
 type Theme = "light" | "dark";
 
@@ -24,7 +23,6 @@ const navItems = [
   { to: "/templates", label: "Templates", icon: "📋" },
   { to: "/contenus", label: "Contenus", icon: "📝" },
   { to: "/linkedin", label: "LinkedIn", icon: "🔗" },
-  { to: "/calendar", label: "Calendar", icon: "📅" },
   { to: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
@@ -160,7 +158,6 @@ export default function App() {
               <Route path="/contenus"        element={<ContenusList />} />
               <Route path="/contenus/:id"   element={<ContenuDetail />} />
               <Route path="/linkedin"   element={<LinkedInHistory />} />
-              <Route path="/calendar"   element={<Calendar />} />
               <Route path="/settings"   element={<Settings />} />
             </Routes>
           </main>

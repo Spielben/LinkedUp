@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { usePostsStore, type Post } from "../stores/posts";
 import { useStylesStore } from "../stores/styles";
@@ -430,21 +431,19 @@ function PostCalendar({
   posts,
   timezone,
   onPostClick,
+  onPostHover,
+  onPostLeave,
 }: {
   posts: Post[];
   timezone: string;
   onPostClick: (id: number) => void;
+  onPostHover: (e: React.MouseEvent, post: CalPost) => void;
+  onPostLeave: () => void;
 }) {
   type ViewMode = "week" | "month" | "6months";
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const today = useMemo(() => todayKey(timezone), [timezone]);
   const [navKey, setNavKey] = useState(today);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-
-  const handlePostHover = (e: React.MouseEvent, post: CalPost) => {
-    setTooltip({ post, x: e.clientX, y: e.clientY });
-  };
-  const handlePostLeave = () => setTooltip(null);
 
   // Map dateKey → posts
   const postsByDate = useMemo(() => {
@@ -643,39 +642,6 @@ function PostCalendar({
         </div>
       )}
 
-      {/* ── Hover tooltip ── */}
-      {tooltip && (
-        <div
-          className="fixed z-50 pointer-events-none"
-          style={{
-            left: Math.min(tooltip.x + 12, window.innerWidth - 280),
-            top: tooltip.y - 8,
-            transform: "translateY(-100%)",
-          }}
-        >
-          <div className="bg-white border border-gray-200 rounded-xl shadow-xl w-64 p-3 text-left">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                tooltip.post.status === "Published"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-teal-100 text-teal-800"
-              }`}>
-                {tooltip.post.status}
-              </span>
-            </div>
-            <p className="text-xs font-semibold text-gray-900 mb-1 leading-snug">
-              {tooltip.post.subject ?? "(untitled)"}
-            </p>
-            {tooltip.post.text ? (
-              <p className="text-xs text-gray-500 leading-relaxed line-clamp-4">
-                {tooltip.post.text}
-              </p>
-            ) : (
-              <p className="text-xs text-gray-400 italic">No content written yet</p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -698,6 +664,12 @@ export function Dashboard() {
   const [timezone, setTimezone] = useState("Asia/Bangkok");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [calTooltip, setCalTooltip] = useState<TooltipState | null>(null);
+
+  const handleCalHover = (e: React.MouseEvent, post: CalPost) => {
+    setCalTooltip({ post, x: e.clientX, y: e.clientY });
+  };
+  const handleCalLeave = () => setCalTooltip(null);
 
   useEffect(() => {
     fetchPosts();
@@ -807,6 +779,8 @@ export function Dashboard() {
         posts={posts}
         timezone={timezone}
         onPostClick={(id) => navigate(`/posts/${id}`)}
+        onPostHover={handleCalHover}
+        onPostLeave={handleCalLeave}
       />
 
       {/* ── Post Status ────────────────────────────────────────────────────── */}
@@ -906,6 +880,46 @@ export function Dashboard() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* ── Calendar hover tooltip (portal → body) ────────────────────────── */}
+      {calTooltip && createPortal(
+        <div
+          className="fixed z-[9999] pointer-events-none"
+          style={{
+            left: Math.min(calTooltip.x + 14, window.innerWidth - 284),
+            top: calTooltip.y,
+            transform: "translateY(calc(-100% - 8px))",
+          }}
+        >
+          <div className="bg-white border border-gray-200 rounded-xl shadow-2xl w-68 p-3 text-left" style={{ width: 272 }}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                calTooltip.post.status === "Published"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-teal-100 text-teal-800"
+              }`}>
+                {calTooltip.post.status}
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-gray-900 mb-1.5 leading-snug">
+              {calTooltip.post.subject ?? "(untitled)"}
+            </p>
+            {calTooltip.post.text ? (
+              <p className="text-xs text-gray-500 leading-relaxed" style={{
+                display: "-webkit-box",
+                WebkitLineClamp: 5,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}>
+                {calTooltip.post.text}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 italic">No content written yet</p>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Modal : LinkedIn preview ───────────────────────────────────────── */}
