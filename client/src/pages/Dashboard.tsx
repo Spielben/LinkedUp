@@ -572,8 +572,8 @@ function PostCalendar({
                       key={p.id}
                       post={p}
                       onClick={() => onPostClick(p.id)}
-                      onHover={handlePostHover}
-                      onLeave={handlePostLeave}
+                      onHover={onPostHover}
+                      onLeave={onPostLeave}
                     />
                   ))}
                 </div>
@@ -610,8 +610,8 @@ function PostCalendar({
                         key={p.id}
                         post={p}
                         onClick={() => onPostClick(p.id)}
-                        onHover={handlePostHover}
-                        onLeave={handlePostLeave}
+                        onHover={onPostHover}
+                        onLeave={onPostLeave}
                       />
                     ))}
                     {dayPosts.length > 2 && (
@@ -635,8 +635,8 @@ function PostCalendar({
               postsByDate={postsByDate}
               today={today}
               onPostClick={onPostClick}
-              onPostHover={handlePostHover}
-              onPostLeave={handlePostLeave}
+              onPostHover={onPostHover}
+              onPostLeave={onPostLeave}
             />
           ))}
         </div>
