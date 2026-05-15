@@ -213,7 +213,7 @@ function isPrivateOrLoopbackIPv4(host: string): boolean {
 }
 
 /** Block obvious non-public targets (hostname or literal IP). Full DNS-SSRF hardening is not covered. */
-function assertPublicHttpUrl(u: URL): void {
+export function assertPublicHttpUrl(u: URL): void {
   const raw = u.hostname;
   if (!raw) throw new Error("URL has no host");
 
@@ -359,7 +359,10 @@ export async function fetchYouTubeTranscript(url: string): Promise<string> {
   const videoId = extractYouTubeId(url);
   if (!videoId) throw new Error(`Could not extract YouTube video ID from: ${url}`);
 
-  const { YoutubeTranscript } = await import("youtube-transcript");
+  // Avoid package "main" (CJS in a "type":"module" tree → "exports is not defined" under Node ESM).
+  const { YoutubeTranscript } = await import(
+    "youtube-transcript/dist/youtube-transcript.esm.js"
+  );
   const segments = await YoutubeTranscript.fetchTranscript(videoId);
   return segments.map((s: { text: string }) => s.text).join(" ").replace(/\s+/g, " ").trim();
 }
