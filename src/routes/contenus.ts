@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getDb } from "../db/index.js";
 import { callOpenRouter, estimateCost } from "../services/openrouter.js";
-import { extractFileContent, fetchWebContent, fetchYouTubeTranscript } from "../services/content-ingestion.js";
+import { extractFileContent, fetchWebContent, fetchYouTubeTranscript, fetchYouTubeTranscriptViaApify } from "../services/content-ingestion.js";
 import { fetchVideoTranscriptAssembly, isThirdPartyVideoIngestUrl } from "../services/video-transcript.js";
 
 /** Ingest: English by default; French when Settings → language is `fr`. */
@@ -297,14 +297,27 @@ contenusRouter.post("/:id/ingest", async (req, res) => {
     const pdf_path = contenu.pdf_path as string | null;
 
     if (url && (url.includes("youtube.com") || url.includes("youtu.be"))) {
+      // 1. Try youtube-transcript library (fast, no API cost)
       try {
         content_raw = await fetchYouTubeTranscript(url);
       } catch (ytErr) {
         const msg = ytErr instanceof Error ? ytErr.message : String(ytErr);
-        console.warn("[ingest] youtube-transcript failed, falling back to AssemblyAI:", msg);
+        console.warn("[ingest] youtube-transcript failed:", msg);
       }
+      // 2. If blocked/empty, try Apify (runs on non-blocked cloud IPs)
       if (!content_raw.trim()) {
-        console.log("[ingest] youtube-transcript returned empty content, falling back to AssemblyAI");
+        console.log("[ingest] youtube-transcript returned empty, trying Apify...");
+        try {
+          content_raw = await fetchYouTubeTranscriptViaApify(url);
+          console.log("[ingest] Apify transcript OK, length:", content_raw.length);
+        } catch (apifyErr) {
+          const msg = apifyErr instanceof Error ? apifyErr.message : String(apifyErr);
+          console.warn("[ingest] Apify fallback failed:", msg);
+        }
+      }
+      // 3. Last resort: AssemblyAI via yt-dlp audio download
+      if (!content_raw.trim()) {
+        console.log("[ingest] Apify failed, falling back to AssemblyAI...");
         content_raw = await fetchVideoTranscriptAssembly(url);
       }
     } else if (url && isThirdPartyVideoIngestUrl(url)) {

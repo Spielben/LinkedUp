@@ -415,6 +415,76 @@ export async function fetchYouTubeTranscript(url: string): Promise<string> {
   throw lastErr ?? new Error("youtube-transcript: all language attempts returned empty");
 }
 
+/**
+ * Fetch YouTube transcript via Apify youtube-scraper actor.
+ * Runs on Apify cloud IPs → bypasses YouTube VPS bot-detection.
+ */
+export async function fetchYouTubeTranscriptViaApify(url: string): Promise<string> {
+  const videoId = extractYouTubeId(url);
+  if (!videoId) throw new Error(`Could not extract YouTube video ID from: ${url}`);
+
+  const apifyKey = process.env.APIFY_API_KEY?.trim();
+  if (!apifyKey) throw new Error("APIFY_API_KEY not set — cannot use Apify fallback");
+
+  const runUrl =
+    "https://api.apify.com/v2/acts/apify~youtube-scraper/run-sync-get-dataset-items?timeout=90";
+
+  const res = await fetch(runUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apifyKey}`,
+    },
+    body: JSON.stringify({
+      startUrls: [{ url: `https://www.youtube.com/watch?v=${videoId}` }],
+      maxResults: 1,
+      downloadSubtitles: true,
+      subtitlesLanguage: "any",
+    }),
+    signal: AbortSignal.timeout(100_000),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Apify youtube-scraper failed (${res.status}): ${body.slice(0, 300)}`);
+  }
+
+  const items = (await res.json()) as Array<Record<string, unknown>>;
+  if (!items.length) throw new Error("Apify youtube-scraper returned no items");
+
+  const item = items[0]!;
+
+  // Try subtitles.tracks[].srtText or subtitles[].body
+  type SubTrack = { srtText?: string; body?: string; lang?: string; isAutomatic?: boolean };
+  const tracks: SubTrack[] =
+    (item.subtitles as { tracks?: SubTrack[] } | undefined)?.tracks ??
+    (Array.isArray(item.subtitles) ? (item.subtitles as SubTrack[]) : []);
+
+  if (tracks.length > 0) {
+    // Prefer automatic captions, then any track
+    const auto = tracks.find((t) => t.isAutomatic) ?? tracks[0]!;
+    const raw = auto.srtText ?? auto.body ?? "";
+    if (raw.trim()) {
+      // Strip SRT timestamps and sequence numbers
+      return raw
+        .split("\n")
+        .filter((line) => !/^\d+$/.test(line.trim()) && !/^\d{2}:\d{2}/.test(line.trim()))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+  }
+
+  // Fallback: use video description as a last resort
+  const description = typeof item.description === "string" ? item.description.trim() : "";
+  if (description) {
+    console.warn("[apify-yt] No subtitles in response, using video description as fallback");
+    return description;
+  }
+
+  throw new Error("Apify youtube-scraper returned no subtitle data for this video");
+}
+
 export async function fetchPdfContent(filePath: string): Promise<string> {
   const safePath = assertSafeDataPath(filePath);
   const buffer = readFileSync(safePath);

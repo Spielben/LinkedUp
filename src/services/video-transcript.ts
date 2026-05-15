@@ -68,7 +68,7 @@ async function assemblyCreateJob(apiKey: string, audioUrl: string): Promise<stri
     },
     body: JSON.stringify({
       audio_url: audioUrl,
-      speech_model: "universal-2",
+      speech_models: { best: {} },
     }),
   });
   if (!res.ok) {
