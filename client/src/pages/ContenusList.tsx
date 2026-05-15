@@ -41,7 +41,9 @@ export function ContenusList() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
+    title: "",
     description: "",
+    source_notes: "",
     category: "Business",
     url: "",
     type: "Web",
@@ -50,7 +52,8 @@ export function ContenusList() {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [replacingId, setReplacingId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -71,6 +74,55 @@ export function ContenusList() {
     }
   };
 
+  const handleReplaceFile = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setReplacingId(id);
+    setIngestError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await apiFetch(`/api/contenus/${id}/replace-upload`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+      await fetchContenus();
+    } catch (err: unknown) {
+      setIngestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReplacingId(null);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!formData.name.trim()) return;
+    setIngestError(null);
+    try {
+      await createContenu({
+        name: formData.name.trim(),
+        title: formData.title.trim() || null,
+        description: formData.description.trim() || null,
+        source_notes: formData.source_notes.trim() || null,
+        category: formData.category,
+        url: formData.url.trim() || null,
+        type: formData.type,
+      });
+      setFormData({
+        name: "",
+        title: "",
+        description: "",
+        source_notes: "",
+        category: "Business",
+        url: "",
+        type: "Web",
+        file: null,
+      });
+      setShowForm(false);
+      await fetchContenus();
+    } catch (err: unknown) {
+      setIngestError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (confirm("Delete this content?")) {
       await deleteContenu(id);
@@ -81,12 +133,19 @@ export function ContenusList() {
     e.preventDefault();
     if (!formData.name.trim()) return;
 
+    if (!formData.file && !formData.url.trim() && ["Web", "YouTube", "Video", "Podcast"].includes(formData.type)) {
+      setIngestError('Add a URL or use "Save draft" to create without a source yet.');
+      return;
+    }
+
     try {
       setIngestError(null);
       if (formData.file) {
         const fd = new FormData();
         fd.append("name", formData.name);
+        fd.append("title", formData.title);
         fd.append("description", formData.description);
+        fd.append("source_notes", formData.source_notes);
         fd.append("category", formData.category);
         fd.append("type", formData.type);
         fd.append("file", formData.file);
@@ -100,13 +159,24 @@ export function ContenusList() {
       } else {
         await createContenu({
           name: formData.name,
+          title: formData.title.trim() || null,
           description: formData.description,
+          source_notes: formData.source_notes.trim() || null,
           category: formData.category,
-          url: formData.url,
+          url: formData.url.trim() || null,
           type: formData.type,
         });
       }
-      setFormData({ name: "", description: "", category: "Business", url: "", type: "Web", file: null });
+      setFormData({
+        name: "",
+        title: "",
+        description: "",
+        source_notes: "",
+        category: "Business",
+        url: "",
+        type: "Web",
+        file: null,
+      });
       setShowForm(false);
     } catch (err: unknown) {
       setIngestError(err instanceof Error ? err.message : String(err));
@@ -146,6 +216,7 @@ export function ContenusList() {
     PDF: "bg-orange-100 text-orange-800",
     Article: "bg-green-100 text-green-800",
     Podcast: "bg-purple-100 text-purple-800",
+    Video: "bg-pink-100 text-pink-800",
   };
 
   return (
@@ -187,7 +258,8 @@ export function ContenusList() {
         <summary className="cursor-pointer font-medium text-gray-700">What is Content?</summary>
         <div className="mt-2 space-y-1.5 pl-1">
           <p>Content sources are <strong>reference documents</strong> the AI reads before writing a post. Think of it as your briefing file — a YouTube video, an article, a PDF report, or any web page you want to turn into LinkedIn content.</p>
-          <p><strong>Types:</strong> <em>Web</em> scrapes a URL, <em>YouTube</em> extracts the video transcript, <em>PDF</em> and <em>Article</em> let you upload a file directly.</p>
+          <p><strong>Types:</strong> <em>Web</em> scrapes a URL, <em>YouTube</em> transcript, <em>Video</em> spoken transcript (TikTok, Facebook, Instagram, Vimeo, X…) via AssemblyAI, <em>PDF</em> / <em>Article</em> file upload.</p>
+          <p><strong>Save draft</strong> creates a row without a URL so you can attach the link or file later. <strong>Replace file</strong> on PDF/Article clears the old summary until you Ingest again.</p>
           <p><strong>Ingest</strong> = the system fetches or reads the source and extracts the text. Until a content is ingested, it has no summary and won't influence AI generation.</p>
           <p><strong>How to use it:</strong> Create → Ingest → open a Post and attach this content source → the AI will ground its writing in that material.</p>
         </div>
@@ -245,9 +317,29 @@ export function ContenusList() {
               <input type="text" required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title (optional)</label>
+              <p className="text-xs text-gray-400 mb-1">Short headline for your own reference in lists.</p>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <p className="text-xs text-gray-400 mb-1">Optional note to remind you what this source covers or why you added it.</p>
               <input type="text" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Source notes (optional)</label>
+              <p className="text-xs text-gray-400 mb-1">Internal notes — not sent to the ingest AI as a separate field; use Description for context in the summary prompt.</p>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                rows={2}
+                value={formData.source_notes}
+                onChange={(e) => setFormData({ ...formData, source_notes: e.target.value })}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
@@ -271,6 +363,7 @@ export function ContenusList() {
                 <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })}>
                   <option value="Web">Web — scrape any URL</option>
                   <option value="YouTube">YouTube — extract transcript</option>
+                  <option value="Video">Video — TikTok / Facebook / Instagram / Vimeo / X (AssemblyAI transcript)</option>
                   <option value="PDF">PDF — upload a PDF file</option>
                   <option value="Article">Article — upload HTML / text file</option>
                   <option value="Podcast">Podcast — URL or notes</option>
@@ -290,18 +383,44 @@ export function ContenusList() {
               ) : (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">URL</label>
-                  <p className="text-xs text-gray-400 mb-1">{formData.type === "YouTube" ? "Full YouTube video URL." : "Public web page to scrape."}</p>
+                  <p className="text-xs text-gray-400 mb-1">
+                    {formData.type === "YouTube"
+                      ? "Full YouTube video URL."
+                      : formData.type === "Video"
+                        ? "Public video URL (TikTok, Facebook Watch, Instagram, Vimeo, Dailymotion, X). Requires AssemblyAI key on the server."
+                        : formData.type === "Podcast"
+                          ? "Podcast page or notes URL."
+                          : "Public web page to scrape."}
+                  </p>
                   <input type="url" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={formData.url} onChange={(e) => setFormData({ ...formData, url: e.target.value })} />
                 </div>
               )}
             </div>
-            <div className="flex gap-2">
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Create</button>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+                Create with source
+              </button>
+              <button
+                type="button"
+                className="bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800"
+                onClick={() => void handleSaveDraft()}
+              >
+                Save draft (URL/file later)
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setShowForm(false);
-                  setFormData({ name: "", description: "", category: "Business", url: "", type: "Web", file: null });
+                  setFormData({
+                    name: "",
+                    title: "",
+                    description: "",
+                    source_notes: "",
+                    category: "Business",
+                    url: "",
+                    type: "Web",
+                    file: null,
+                  });
                 }}
                 className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300"
               >
@@ -309,6 +428,13 @@ export function ContenusList() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {ingestError && (
+        <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start">
+          <span className="min-w-0 break-words">{ingestError}</span>
+          <button type="button" onClick={() => setIngestError(null)} className="shrink-0 self-end sm:self-start text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
 
@@ -320,12 +446,6 @@ export function ContenusList() {
         <p className="text-gray-500">No content in this category. Choose &quot;All&quot; or pick another filter.</p>
       ) : (
         <>
-          {ingestError && (
-            <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start">
-              <span className="min-w-0 break-words">{ingestError}</span>
-              <button type="button" onClick={() => setIngestError(null)} className="shrink-0 self-end sm:self-start text-red-400 hover:text-red-600">✕</button>
-            </div>
-          )}
           <div className={viewMode === "grid"
             ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"
             : "grid gap-2 md:gap-3 w-full min-w-0"
@@ -387,15 +507,31 @@ export function ContenusList() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end sm:justify-end shrink-0">
-                    {(c.url || c.pdf_path) && !c.summary && (
+                    {(c.url || c.pdf_path) && (
                       <button
                         type="button"
                         className="px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 min-h-[2rem] sm:min-h-0"
                         disabled={ingestingId === c.id}
-                        onClick={(e) => { e.stopPropagation(); void handleIngest(c.id); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleIngest(c.id);
+                        }}
                       >
-                        {ingestingId === c.id ? "Ingesting…" : "Ingest"}
+                        {ingestingId === c.id ? "Ingesting…" : c.summary ? "Re-ingest" : "Ingest"}
                       </button>
+                    )}
+                    {(c.type === "PDF" || c.type === "Article") && (
+                      <label className="px-2.5 py-1 text-xs font-medium rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer border border-gray-200 min-h-[2rem] sm:min-h-0 flex items-center">
+                        {replacingId === c.id ? "…" : "Replace file"}
+                        <input
+                          type="file"
+                          accept={c.type === "PDF" ? ".pdf" : ".html,.txt,.md,.doc,.docx"}
+                          className="hidden"
+                          onChange={(e) => {
+                            void handleReplaceFile(c.id, e);
+                          }}
+                        />
+                      </label>
                     )}
                     <button
                       type="button"

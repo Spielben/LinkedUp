@@ -13,6 +13,8 @@ export interface Contenu {
   summary: string | null;
   status: string;
   created_at: string;
+  title?: string | null;
+  source_notes?: string | null;
 }
 
 interface ContenusStore {
@@ -36,11 +38,15 @@ export const useContenusStore = create<ContenusStore>((set, get) => ({
   },
 
   create: async (data) => {
-    await apiFetch("/api/contenus", {
+    const res = await apiFetch("/api/contenus", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(typeof payload?.error === "string" ? payload.error : `Server error (${res.status})`);
+    }
     await get().fetch();
   },
 
