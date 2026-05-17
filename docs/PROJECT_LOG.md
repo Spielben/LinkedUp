@@ -100,3 +100,25 @@ Chronological session handoffs (Cursor). Linear hub: [LIN-40](https://linear.app
 
 ### Next recommended action
 - Tester upload PDF + génération de post avec brand identity active
+
+---
+
+## 2026-05-17 16:00 (Asia/Bangkok)
+
+**Project:** linkdup (LinkedUp)  
+**Scope:** Règle owner — logs + commit + push par l’agent, pas par Ben
+
+### Actions completed
+- Push `origin/main` : `9290062` + `f4e870d` (session-log config + PROJECT_LOG VPS entry)
+- Skill `session-handoff` mise à jour : commit et push autonomes obligatoires, ne pas déléguer à Ben
+
+### Files touched
+- `~/.cursor/skills/session-handoff/SKILL.md` — règles git autonomes
+- `docs/PROJECT_LOG.md` — cette entrée
+
+### Last stable state
+- `main` synchronisé avec GitHub
+- Handoff end-to-end géré par l’agent
+
+### Next recommended action
+- —
