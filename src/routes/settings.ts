@@ -69,11 +69,11 @@ async function extractText(filePath: string, mimetype: string, originalname: str
   const ext = path.extname(originalname).toLowerCase();
 
   if (ext === ".pdf" || mimetype === "application/pdf") {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+    const { PDFParse } = await import("pdf-parse");
     const buffer = fs.readFileSync(filePath);
-    const data = await pdfParse(buffer);
-    return data.text.trim();
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    return result.text.trim();
   }
 
   if (
@@ -101,6 +101,7 @@ settingsRouter.get("/", (_req, res) => {
 
 settingsRouter.put("/", (req, res) => {
   const db = getDb();
+  const body = req.body as Record<string, unknown>;
   const {
     name,
     email,
@@ -111,10 +112,10 @@ settingsRouter.put("/", (req, res) => {
     preferred_post_days,
     preferred_post_time,
     timezone,
-  } = req.body;
+  } = body;
 
   const existingRow = db.prepare("SELECT * FROM settings WHERE id = 1").get() as
-    | { language?: string }
+    | { language?: string; company_context?: string | null; forbidden_expressions?: string | null; image_generation_model?: string | null }
     | undefined;
 
   const normalizedLanguage =
@@ -143,11 +144,30 @@ settingsRouter.put("/", (req, res) => {
       ? timezone.trim()
       : "Asia/Bangkok";
 
+  const companyContext =
+    "company_context" in body && typeof body.company_context === "string"
+      ? body.company_context.trim() || null
+      : (existingRow?.company_context as string | null) ?? null;
+  const forbiddenExpressions =
+    "forbidden_expressions" in body && typeof body.forbidden_expressions === "string"
+      ? body.forbidden_expressions.trim() || null
+      : (existingRow?.forbidden_expressions as string | null) ?? null;
+
+  const rawImgModel =
+    "image_generation_model" in body && typeof body.image_generation_model === "string"
+      ? body.image_generation_model.trim()
+      : String((existingRow?.image_generation_model as string | null) || "openai/dall-e-3").trim();
+  const imageGenerationModel =
+    /^[a-z0-9][a-z0-9./+\-_:]{1,120}$/i.test(rawImgModel)
+      ? rawImgModel
+      : "openai/dall-e-3";
+
   if (existingRow) {
     db.prepare(`
       UPDATE settings
       SET name = ?, email = ?, linkedin_url = ?, signature = ?, budget_limit = ?,
-          language = ?, preferred_post_days = ?, preferred_post_time = ?, timezone = ?
+          language = ?, preferred_post_days = ?, preferred_post_time = ?, timezone = ?,
+          company_context = ?, forbidden_expressions = ?, image_generation_model = ?
       WHERE id = 1
     `).run(
       name || null,
@@ -158,12 +178,15 @@ settingsRouter.put("/", (req, res) => {
       normalizedLanguage,
       normalizedDays,
       normalizedTime,
-      normalizedTimezone
+      normalizedTimezone,
+      companyContext,
+      forbiddenExpressions,
+      imageGenerationModel
     );
   } else {
     db.prepare(`
-      INSERT INTO settings (id, name, email, linkedin_url, signature, budget_limit, language, preferred_post_days, preferred_post_time, timezone)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO settings (id, name, email, linkedin_url, signature, budget_limit, language, preferred_post_days, preferred_post_time, timezone, company_context, forbidden_expressions, image_generation_model)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name || null,
       email || null,
@@ -173,12 +196,15 @@ settingsRouter.put("/", (req, res) => {
       normalizedLanguage,
       normalizedDays,
       normalizedTime,
-      normalizedTimezone
+      normalizedTimezone,
+      companyContext,
+      forbiddenExpressions,
+      imageGenerationModel
     );
   }
 
   const updated = db.prepare("SELECT * FROM settings WHERE id = 1").get();
-  res.json(updated);
+  res.json(updated || {});
 });
 
 // ── POST /api/settings/logo ───────────────────────────────────────────────────
